@@ -19,7 +19,6 @@ import {
 import { Badge } from "@/components/ui/badge";
 import Navbar from "@/components/layout/Navbar";
 import ProfileCompletion from "@/components/profile/ProfileCompletion";
-import type { ProfileCompletionStep } from "@/components/profile/ProfileCompletion";
 import TeamCard from "@/components/teams/TeamCard";
 import type { TeamCardData } from "@/components/teams/TeamCard";
 import ApplicationStatus from "@/components/applications/ApplicationStatus";
@@ -375,7 +374,6 @@ export default function DashboardPage() {
             {/* Profile completion */}
             <ProfileCompletion
               percentage={PROFILE_PERCENTAGE}
-              steps={PROFILE_STEPS}
             />
 
             {/* My teams */}
