@@ -31,17 +31,7 @@ const MOCK_USER = {
   avatarInitials: "AJ",
 };
 
-const PROFILE_STEPS: ProfileCompletionStep[] = [
-  { label: "Add your photo", done: true, href: "/profile/edit" },
-  { label: "Write a bio", done: true, href: "/profile/edit#bio" },
-  { label: "Add your skills", done: false, href: "/profile/edit#skills" },
-  { label: "Link your GitHub", done: false, href: "/profile/edit#links" },
-  { label: "Verify your email", done: true, href: "/settings" },
-];
-
-const PROFILE_PERCENTAGE = Math.round(
-  (PROFILE_STEPS.filter((s) => s.done).length / PROFILE_STEPS.length) * 100
-);
+const PROFILE_PERCENTAGE = 75;
 
 const RECOMMENDED_TEAMS: TeamCardData[] = [
   {
@@ -468,3 +458,4 @@ export default function DashboardPage() {
     </div>
   );
 }
+
