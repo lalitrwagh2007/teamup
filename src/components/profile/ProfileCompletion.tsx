@@ -49,7 +49,7 @@ export default function ProfileCompletion({
             <Button
               size="sm"
               className="w-full rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-              asChild
+              
             >
               <Link href="/profile/edit">Complete your profile</Link>
             </Button>
