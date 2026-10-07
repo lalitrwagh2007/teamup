@@ -86,9 +86,11 @@ export default function TeamCard({
       </CardContent>
 
       <CardFooter>
-        <Button asChild variant="outline" className="w-full sm:w-auto">
-          <Link href={`/teams/${id}`}>View Team</Link>
-        </Button>
+        <Link href={`/teams/${id}`}>
+          <Button variant="outline" className="w-full sm:w-auto">
+            View Team
+          </Button>
+        </Link>
       </CardFooter>
     </Card>
   );

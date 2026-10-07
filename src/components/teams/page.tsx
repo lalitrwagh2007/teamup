@@ -158,10 +158,16 @@ export default function TeamsPage() {
           placeholder="Search teams..."
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          className="lg:col-span-1"
         />
 
-        <Select value={skill} onValueChange={setSkill}>
+        <Select
+          value={skill}
+          onValueChange={(value) => {
+            if (value !== null) {
+              setSkill(value);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Filter by skill" />
           </SelectTrigger>
@@ -175,7 +181,14 @@ export default function TeamsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={category} onValueChange={setCategory}>
+        <Select
+          value={category}
+          onValueChange={(value) => {
+            if (value !== null) {
+              setCategory(value);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Filter by category" />
           </SelectTrigger>
@@ -189,7 +202,14 @@ export default function TeamsPage() {
           </SelectContent>
         </Select>
 
-        <Select value={mode} onValueChange={setMode}>
+        <Select
+          value={mode}
+          onValueChange={(value) => {
+            if (value !== null) {
+              setMode(value);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Filter by mode" />
           </SelectTrigger>
