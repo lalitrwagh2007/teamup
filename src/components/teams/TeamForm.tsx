@@ -20,7 +20,6 @@ export default function TeamForm() {
   const handleSubmit = (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    // Frontend only for now.
     console.log("Team form submitted");
   };
 
@@ -54,7 +53,14 @@ export default function TeamForm() {
       <div className="space-y-2">
         <label className="text-sm font-medium">Category</label>
 
-        <Select value={category} onValueChange={setCategory}>
+        <Select
+          value={category}
+          onValueChange={(value) => {
+            if (value !== null) {
+              setCategory(value);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Select category" />
           </SelectTrigger>
@@ -112,7 +118,14 @@ export default function TeamForm() {
       <div className="space-y-2">
         <label className="text-sm font-medium">Work mode</label>
 
-        <Select value={mode} onValueChange={setMode}>
+        <Select
+          value={mode}
+          onValueChange={(value) => {
+            if (value !== null) {
+              setMode(value);
+            }
+          }}
+        >
           <SelectTrigger>
             <SelectValue placeholder="Select work mode" />
           </SelectTrigger>
