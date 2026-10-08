@@ -1,12 +1,23 @@
 import Link from "next/link";
 import { Briefcase, Edit, ExternalLink, Code, Globe, Users } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
-import ProfileCard from "@/components/profile/ProfileCard";
+import ProfileCard, { type AvailabilityStatus } from "@/components/profile/ProfileCard";
 import SkillTags from "@/components/profile/SkillTags";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getCurrentProfile } from "@/app/actions/profile";
 import { redirect } from "next/navigation";
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+const VALID_AVAILABILITY: AvailabilityStatus[] = ["Available", "Busy", "Looking for team"];
+
+function parseAvailability(val: string | null | undefined): AvailabilityStatus {
+  if (val && VALID_AVAILABILITY.includes(val as AvailabilityStatus)) {
+    return val as AvailabilityStatus;
+  }
+  return "Looking for team";
+}
 
 // ─── Static experience data (not stored in profiles table) ───────────────────
 
@@ -46,7 +57,7 @@ export default async function ProfilePage() {
     bio: profile.bio || "No bio yet.",
     location: profile.location || "Not specified",
     skills: profile.skills,
-    availability: profile.availability || "Not set",
+    availability: parseAvailability(profile.availability),
     completionPercentage: profile.profileCompletion,
   };
 
@@ -57,6 +68,7 @@ export default async function ProfilePage() {
   };
 
   const hasLinks = links.github || links.linkedin || links.portfolio;
+
 
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
@@ -78,6 +90,7 @@ export default async function ProfilePage() {
           {/* Left Column: Profile Card */}
           <div className="flex flex-col gap-6 lg:col-span-1">
             <ProfileCard profile={profileCardData} />
+
 
             {/* Social / Portfolio Links Card */}
             {hasLinks && (
@@ -159,6 +172,7 @@ export default async function ProfilePage() {
                 </CardContent>
               </Card>
             )}
+
 
           </div>
         </div>

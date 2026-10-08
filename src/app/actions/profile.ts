@@ -1,8 +1,10 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
+import { revalidatePath } from "next/cache";
+import { getUserSkills } from "@/app/actions/skills";
 import { updateProfileSchema, type UpdateProfileInput } from "@/validations/profile.schema";
-import type { UserProfile } from "@/types/user";
+import type { ProficiencyLevel, UserProfile, UserSkillItem } from "@/types/user";
 import { BUCKETS } from "@/lib/supabase/storage";
 
 // ─── Result types ───────────────────────────────────────────────────────────
@@ -22,6 +24,76 @@ export type UploadAvatarResult =
   | { success: true; avatarUrl: string }
   | { success: false; message: string };
 
+// ─── Result types for user-skill actions ─────────────────────────────────────
+
+export type UserSkillsActionResult =
+  | { success: true; message?: string; data?: UserSkillItem[] }
+  | { success: false; message: string; errors?: Record<string, string[]> };
+
+// ─── updateUserSkills (real Supabase) ───────────────────────────────────────
+
+/**
+ * Replaces the authenticated user's skill mappings with the provided list,
+ * respecting ownership (auth.uid()) and reusing existing skill records.
+ *
+ * Duplicate user_skills mappings are prevented by the composite primary key
+ * (user_id, skill_id) and by upserting with { onConflict: "user_id,skill_id" }.
+ */
+export async function updateUserSkills(
+  skills: { skillId: string; proficiency: ProficiencyLevel }[]
+): Promise<UserSkillsActionResult> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Authenticate & enforce ownership using auth.uid()
+    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    if (authError || !user) {
+      return { success: false, message: "You must be logged in to update skills." };
+    }
+
+    // 2. Server-side validation: every proficiency must be an exact enum value
+    const invalid = skills.some((s) => !(["Beginner", "Intermediate", "Advanced", "Expert"] as readonly ProficiencyLevel[]).includes(s.proficiency));
+    if (invalid) {
+      return { success: false, message: "Invalid proficiency level provided." };
+    }
+
+    if (skills.length === 0) {
+      return { success: true, message: "No skills to update.", data: [] };
+    }
+
+    // 3. Upsert each skill mapping. If a mapping already exists, its proficiency is updated;
+    //    if it is new, it is inserted. This is scoped strictly to auth.uid().
+    for (const { skillId, proficiency } of skills) {
+      const { error: upsertError } = await supabase
+        .from("user_skills")
+        .upsert(
+          {
+            user_id: user.id,
+            skill_id: skillId,
+            proficiency: proficiency,
+          },
+          { onConflict: "user_id,skill_id" }
+        );
+
+      if (upsertError) {
+        return { success: false, message: "Failed to update skills. Please try again." };
+      }
+    }
+
+    revalidatePath("/profile");
+    revalidatePath("/profile/edit");
+
+    const updatedUserSkillsResult = await getUserSkills(user.id);
+    return {
+      success: true,
+      message: "Skills updated successfully.",
+      data: updatedUserSkillsResult.success ? updatedUserSkillsResult.data : [],
+    };
+  } catch {
+    return { success: false, message: "An unexpected error occurred. Please try again later." };
+  }
+}
+
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
 /** Compute a rough profile-completion percentage based on filled fields. */
@@ -36,7 +108,7 @@ function computeCompletion(profile: {
   github: string | null;
   linkedin: string | null;
   portfolio: string | null;
-  skills: string[];
+  skills: (string | UserSkillItem)[];
   interests: string[];
 }): number {
   const checks = [
@@ -71,8 +143,9 @@ function toUserProfile(
     linkedin: string | null;
     portfolio: string | null;
   },
-  skills: string[],
-  interests: string[]
+  skills: (string | UserSkillItem)[],
+  interests: string[],
+  userSkills?: UserSkillItem[]
 ): UserProfile {
   return {
     id: row.id,
@@ -87,6 +160,7 @@ function toUserProfile(
     linkedin: row.linkedin ?? "",
     portfolio: row.portfolio ?? "",
     skills,
+    userSkills,
     interests,
     profileCompletion: computeCompletion({ ...row, skills, interests }),
   };
@@ -126,18 +200,28 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
       return { success: false, message: "Profile not found." };
     }
 
-    // 3. Fetch the user's skills (via junction table)
-    const { data: userSkills } = await supabase
+    // 3. Fetch the user's skills (via junction table with proficiency)
+    const { data: userSkillsRaw } = await supabase
       .from("user_skills")
-      .select("skill_id, skills(name)")
+      .select("skill_id, proficiency, skills(id, name, category)")
       .eq("user_id", user.id);
 
-    const skills: string[] = (userSkills ?? [])
-      .map((row: Record<string, unknown>) => {
-        const s = row.skills as { name: string } | null;
-        return s?.name ?? null;
-      })
-      .filter((name): name is string => name !== null);
+    const detailedSkills: UserSkillItem[] = (userSkillsRaw ?? []).flatMap((row: Record<string, unknown>) => {
+      const s = row.skills as {
+        id: string;
+        name: string;
+        category?: string | null;
+      } | null;
+
+      if (!s) return [];
+
+      return [{
+        skillId: s.id,
+        name: s.name,
+        proficiency: (row.proficiency as ProficiencyLevel) || "Intermediate",
+        category: s.category ?? null,
+      }];
+    });
 
     // 4. Fetch the user's interests (via junction table)
     const { data: userInterests } = await supabase
@@ -153,7 +237,10 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
       .filter((name): name is string => name !== null);
 
     // 5. Map to the UserProfile type
-    return { success: true, profile: toUserProfile(profile, skills, interests) };
+    return {
+      success: true,
+      profile: toUserProfile(profile, detailedSkills, interests, detailedSkills),
+    };
   } catch {
     return { success: false, message: "An unexpected error occurred. Please try again later." };
   }

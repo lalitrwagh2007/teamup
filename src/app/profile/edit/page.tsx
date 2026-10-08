@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import UserSkillsManager from "@/components/profile/UserSkillsManager";
 import {
   Card,
   CardContent,
@@ -54,28 +55,7 @@ export default function EditProfilePage() {
   // ─── Profile save via server action ────────────────────────────────────────
   const [state, formAction, isSaving] = useActionState<UpdateProfileState | null, FormData>(
     async (_prevState, formData) => {
-      // The edit form uses comma-separated skills/interests in single inputs.
-      // The server action expects multiple "skills" form entries.
-      // Parse and re-attach them as individual entries.
-      const skillsRaw = (formData.get("skillsRaw") as string) ?? "";
       const interestsRaw = (formData.get("interestsRaw") as string) ?? "";
-
-      // Remove the raw fields
-      formData.delete("skillsRaw");
-      formData.delete("interestsRaw");
-
-      // Parse comma-separated values into individual form entries
-      skillsRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((s) => formData.append("skills", s));
-
-      interestsRaw
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean)
-        .forEach((s) => formData.append("interests", s));
 
       // Map field names from the UI to what the server action expects
       const github = formData.get("githubUrl") as string;
@@ -367,19 +347,8 @@ export default function EditProfilePage() {
               </div>
 
               <div className="flex flex-col gap-2">
-                <label htmlFor="skillsRaw" className="text-sm font-medium">
-                  Skills (comma-separated)
-                </label>
-                <Input
-                  id="skillsRaw"
-                  name="skillsRaw"
-                  defaultValue={profile.skills.join(", ")}
-                  placeholder="E.g. Python, Machine Learning, UI Design"
-                />
-              </div>
 
-              <div className="flex flex-col gap-2">
-                <label htmlFor="interestsRaw" className="text-sm font-medium">
+              <label htmlFor="interestsRaw" className="text-sm font-medium">
                   Interests (comma-separated)
                 </label>
                 <Input
@@ -391,6 +360,9 @@ export default function EditProfilePage() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Real User Skills & Proficiency Manager */}
+          <UserSkillsManager />
 
           {/* Social Links */}
           <Card>

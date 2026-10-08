@@ -3,7 +3,7 @@ import { cn } from "@/lib/utils";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import SkillTags from "./SkillTags";
+import SkillTags, { SkillTagItem } from "./SkillTags";
 import ProfileCompletion from "./ProfileCompletion";
 
 export type AvailabilityStatus = "Available" | "Busy" | "Looking for team";
@@ -13,8 +13,8 @@ export interface ProfileData {
   avatarUrl?: string;
   bio: string;
   location: string;
-  skills: string[];
-  availability: string;
+  skills: SkillTagItem[];
+  availability: AvailabilityStatus;
   completionPercentage: number;
 }
 

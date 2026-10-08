@@ -1,4 +1,13 @@
-import { ApplicationStatus, InvitationStatus, MemberRole, TeamRoleStatus, TeamStatus, TeamTrack, WorkMode } from "./database";
+import { ApplicationStatus, InvitationStatus, MemberRole, ProficiencyLevel, TeamRoleStatus, TeamStatus, TeamTrack, WorkMode } from "./database";
+
+export type { ProficiencyLevel };
+
+export interface UserSkillItem {
+  skillId: string;
+  name: string;
+  proficiency: ProficiencyLevel;
+  category?: string | null;
+}
 
 export interface UserProfile {
   id: string;
@@ -7,7 +16,8 @@ export interface UserProfile {
   bio: string;
   location: string;
   avatarUrl: string;
-  skills: string[];
+  skills: (string | UserSkillItem)[];
+  userSkills?: UserSkillItem[];
   interests: string[];
   availability: string;
   workMode: WorkMode;
@@ -30,3 +40,4 @@ export interface Interest {
   category?: string | null;
   createdAt?: string;
 }
+

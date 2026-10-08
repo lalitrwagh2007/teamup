@@ -13,6 +13,7 @@ export type TeamRoleStatus = "open" | "filled" | "closed"
 export type ApplicationStatus = "pending" | "accepted" | "rejected" | "cancelled"
 export type InvitationStatus = "pending" | "accepted" | "rejected" | "cancelled"
 export type MemberRole = "leader" | "member"
+export type ProficiencyLevel = "Beginner" | "Intermediate" | "Advanced" | "Expert"
 
 export interface Database {
   public: {
@@ -91,16 +92,19 @@ export interface Database {
         Row: {
           user_id: string
           skill_id: string
+          proficiency: ProficiencyLevel
           created_at: string
         }
         Insert: {
           user_id: string
           skill_id: string
+          proficiency?: ProficiencyLevel
           created_at?: string
         }
         Update: {
           user_id?: string
           skill_id?: string
+          proficiency?: ProficiencyLevel
           created_at?: string
         }
       }
