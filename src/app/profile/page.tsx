@@ -1,30 +1,14 @@
 import Link from "next/link";
 import { Briefcase, Edit, ExternalLink, Code, Globe, Users } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
-import ProfileCard, { ProfileData } from "@/components/profile/ProfileCard";
+import ProfileCard from "@/components/profile/ProfileCard";
 import SkillTags from "@/components/profile/SkillTags";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getCurrentProfile } from "@/app/actions/profile";
+import { redirect } from "next/navigation";
 
-// ─── Mock Data ───────────────────────────────────────────────────────────────
-
-const MOCK_PROFILE: ProfileData = {
-  name: "Alex Johnson",
-  avatarUrl: "",
-  bio: "Full-stack developer passionate about building tools that help communities connect. Constantly learning and exploring new technologies. Love participating in weekend hackathons.",
-  location: "San Francisco, CA",
-  skills: ["React", "TypeScript", "Node.js", "Figma", "Next.js", "Tailwind CSS"],
-  availability: "Looking for team",
-  completionPercentage: 85,
-};
-
-const MOCK_INTERESTS = [
-  "Hackathons",
-  "Open Source",
-  "Climate Tech",
-  "AI / ML",
-  "Community Building",
-];
+// ─── Static experience data (not stored in profiles table) ───────────────────
 
 const MOCK_EXPERIENCE = [
   {
@@ -45,15 +29,35 @@ const MOCK_EXPERIENCE = [
   },
 ];
 
-const MOCK_LINKS = {
-  github: "https://github.com",
-  linkedin: "https://linkedin.com",
-  portfolio: "https://example.com",
-};
-
 // ─── Page Component ──────────────────────────────────────────────────────────
 
-export default function ProfilePage() {
+export default async function ProfilePage() {
+  const result = await getCurrentProfile();
+
+  if (!result.success) {
+    redirect("/login");
+  }
+
+  const profile = result.profile;
+
+  const profileCardData = {
+    name: profile.name || "Unnamed User",
+    avatarUrl: profile.avatarUrl || "",
+    bio: profile.bio || "No bio yet.",
+    location: profile.location || "Not specified",
+    skills: profile.skills,
+    availability: profile.availability || "Not set",
+    completionPercentage: profile.profileCompletion,
+  };
+
+  const links = {
+    github: profile.github,
+    linkedin: profile.linkedin,
+    portfolio: profile.portfolio,
+  };
+
+  const hasLinks = links.github || links.linkedin || links.portfolio;
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Navbar />
@@ -73,29 +77,37 @@ export default function ProfilePage() {
           
           {/* Left Column: Profile Card */}
           <div className="flex flex-col gap-6 lg:col-span-1">
-            <ProfileCard profile={MOCK_PROFILE} />
+            <ProfileCard profile={profileCardData} />
 
             {/* Social / Portfolio Links Card */}
-            <Card>
-              <CardHeader className="pb-3">
-                <CardTitle className="text-base font-semibold">Links</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-3">
-                <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={MOCK_LINKS.github} target="_blank" rel="noreferrer" />}>
-                  <Code className="size-4 text-muted-foreground" />
-                  GitHub
-                </Button>
-                <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={MOCK_LINKS.linkedin} target="_blank" rel="noreferrer" />}>
-                  <Users className="size-4 text-muted-foreground" />
-                  LinkedIn
-                </Button>
-                <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={MOCK_LINKS.portfolio} target="_blank" rel="noreferrer" />}>
-                  <Globe className="size-4 text-muted-foreground" />
-                  Portfolio
-                  <ExternalLink className="ml-auto size-3.5 text-muted-foreground opacity-50" />
-                </Button>
-              </CardContent>
-            </Card>
+            {hasLinks && (
+              <Card>
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-semibold">Links</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-3">
+                  {links.github && (
+                    <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={links.github} target="_blank" rel="noreferrer" />}>
+                      <Code className="size-4 text-muted-foreground" />
+                      GitHub
+                    </Button>
+                  )}
+                  {links.linkedin && (
+                    <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={links.linkedin} target="_blank" rel="noreferrer" />}>
+                      <Users className="size-4 text-muted-foreground" />
+                      LinkedIn
+                    </Button>
+                  )}
+                  {links.portfolio && (
+                    <Button variant="outline" className="w-full justify-start gap-3 rounded-lg" render={<a href={links.portfolio} target="_blank" rel="noreferrer" />}>
+                      <Globe className="size-4 text-muted-foreground" />
+                      Portfolio
+                      <ExternalLink className="ml-auto size-3.5 text-muted-foreground opacity-50" />
+                    </Button>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Right Column: Experience & Interests */}
@@ -137,15 +149,16 @@ export default function ProfilePage() {
             </Card>
 
             {/* Interests */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Interests</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {/* We reuse SkillTags for interests since visually they are the same (pill badges) */}
-                <SkillTags skills={MOCK_INTERESTS} />
-              </CardContent>
-            </Card>
+            {profile.interests.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg font-bold">Interests</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <SkillTags skills={profile.interests} />
+                </CardContent>
+              </Card>
+            )}
 
           </div>
         </div>

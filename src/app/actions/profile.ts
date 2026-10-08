@@ -3,6 +3,7 @@
 import { createClient } from "@/lib/supabase/server";
 import { updateProfileSchema, type UpdateProfileInput } from "@/validations/profile.schema";
 import type { UserProfile } from "@/types/user";
+import { BUCKETS } from "@/lib/supabase/storage";
 
 // ─── Result types ───────────────────────────────────────────────────────────
 
@@ -16,6 +17,10 @@ export type UpdateProfileState = {
   profile?: UserProfile;
   errors?: Partial<Record<keyof UpdateProfileInput, string[]>>;
 };
+
+export type UploadAvatarResult =
+  | { success: true; avatarUrl: string }
+  | { success: false; message: string };
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
 
@@ -316,6 +321,84 @@ export async function updateProfile(
       message: "Profile updated successfully!",
       profile: result.profile,
     };
+  } catch {
+    return { success: false, message: "An unexpected error occurred. Please try again later." };
+  }
+}
+
+// ─── uploadAvatarAction ─────────────────────────────────────────────────────
+
+const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+
+/**
+ * Uploads an avatar image for the authenticated user.
+ *
+ * Ownership is enforced: the file is stored under `profiles/{auth.uid()}/avatar`
+ * and the avatar_url is only updated on the user's own profile row.
+ */
+export async function uploadAvatarAction(formData: FormData): Promise<UploadAvatarResult> {
+  try {
+    const supabase = await createClient();
+
+    // 1. Authenticate
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
+    if (authError || !user) {
+      return { success: false, message: "You must be logged in to upload an avatar." };
+    }
+
+    // 2. Validate the file
+    const file = formData.get("avatar") as File | null;
+
+    if (!file || file.size === 0) {
+      return { success: false, message: "No file selected." };
+    }
+
+    if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+      return { success: false, message: "Please upload a JPEG, PNG, WebP, or GIF image." };
+    }
+
+    if (file.size > MAX_FILE_SIZE) {
+      return { success: false, message: "File size must be under 5 MB." };
+    }
+
+    // 3. Upload to Supabase Storage — scoped to this user's folder
+    const fileExt = file.name.split(".").pop() ?? "jpg";
+    const filePath = `profiles/${user.id}/avatar.${fileExt}`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKETS.AVATARS)
+      .upload(filePath, file, {
+        upsert: true,
+        cacheControl: "3600",
+      });
+
+    if (uploadError) {
+      return { success: false, message: "Failed to upload avatar. Please try again." };
+    }
+
+    // 4. Get the public URL
+    const { data: publicUrlData } = supabase.storage
+      .from(BUCKETS.AVATARS)
+      .getPublicUrl(filePath);
+
+    const avatarUrl = publicUrlData.publicUrl;
+
+    // 5. Update the profile row — scoped to auth.uid()
+    const { error: updateError } = await supabase
+      .from("profiles")
+      .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+      .eq("id", user.id);
+
+    if (updateError) {
+      return { success: false, message: "Avatar uploaded but failed to update profile." };
+    }
+
+    return { success: true, avatarUrl };
   } catch {
     return { success: false, message: "An unexpected error occurred. Please try again later." };
   }

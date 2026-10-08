@@ -14,7 +14,7 @@ export interface ProfileData {
   bio: string;
   location: string;
   skills: string[];
-  availability: AvailabilityStatus;
+  availability: string;
   completionPercentage: number;
 }
 

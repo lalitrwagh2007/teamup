@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowLeft, Loader2, Save } from "lucide-react";
-import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { ArrowLeft, Camera, Loader2, Save } from "lucide-react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { toast } from "sonner";
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,21 +23,168 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  getCurrentProfile,
+  updateProfile,
+  uploadAvatarAction,
+  type UpdateProfileState,
+} from "@/app/actions/profile";
+import type { UserProfile } from "@/types/user";
 
 export default function EditProfilePage() {
-  const [isSaving, setIsSaving] = useState(false);
+  const router = useRouter();
 
-  // Placeholder form handler
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsSaving(true);
-    // Simulate network request
-    setTimeout(() => {
-      setIsSaving(false);
-      // Would normally redirect or show success toast here
-    }, 1500);
+  // ─── Profile data loading ──────────────────────────────────────────────────
+  const [profile, setProfile] = useState<UserProfile | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    getCurrentProfile().then((result) => {
+      if (result.success) {
+        setProfile(result.profile);
+      } else {
+        toast.error(result.message);
+        router.push("/login");
+      }
+      setIsLoading(false);
+    });
+  }, [router]);
+
+  // ─── Profile save via server action ────────────────────────────────────────
+  const [state, formAction, isSaving] = useActionState<UpdateProfileState | null, FormData>(
+    async (_prevState, formData) => {
+      // The edit form uses comma-separated skills/interests in single inputs.
+      // The server action expects multiple "skills" form entries.
+      // Parse and re-attach them as individual entries.
+      const skillsRaw = (formData.get("skillsRaw") as string) ?? "";
+      const interestsRaw = (formData.get("interestsRaw") as string) ?? "";
+
+      // Remove the raw fields
+      formData.delete("skillsRaw");
+      formData.delete("interestsRaw");
+
+      // Parse comma-separated values into individual form entries
+      skillsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((s) => formData.append("skills", s));
+
+      interestsRaw
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((s) => formData.append("interests", s));
+
+      // Map field names from the UI to what the server action expects
+      const github = formData.get("githubUrl") as string;
+      const linkedin = formData.get("linkedinUrl") as string;
+      const portfolio = formData.get("portfolioUrl") as string;
+
+      formData.delete("githubUrl");
+      formData.delete("linkedinUrl");
+      formData.delete("portfolioUrl");
+
+      formData.set("github", github ?? "");
+      formData.set("linkedin", linkedin ?? "");
+      formData.set("portfolio", portfolio ?? "");
+
+      const result = await updateProfile(null, formData);
+      return result;
+    },
+    null
+  );
+
+  // Handle success/error toasts
+  useEffect(() => {
+    if (!state) return;
+    if (state.success) {
+      toast.success(state.message ?? "Profile updated!");
+      if (state.profile) {
+        setProfile(state.profile);
+      }
+      router.push("/profile");
+    } else if (state.message) {
+      toast.error(state.message);
+    }
+  }, [state, router]);
+
+  // ─── Avatar upload ─────────────────────────────────────────────────────────
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [isUploadingAvatar, startAvatarUpload] = useTransition();
+  const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate client-side for immediate feedback
+    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    if (!allowedTypes.includes(file.type)) {
+      toast.error("Please upload a JPEG, PNG, WebP, or GIF image.");
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error("File size must be under 5 MB.");
+      return;
+    }
+
+    // Show local preview immediately
+    const previewUrl = URL.createObjectURL(file);
+    setAvatarPreview(previewUrl);
+
+    // Upload via server action
+    startAvatarUpload(async () => {
+      const formData = new FormData();
+      formData.append("avatar", file);
+      const result = await uploadAvatarAction(formData);
+
+      if (result.success) {
+        toast.success("Avatar updated!");
+        setAvatarPreview(result.avatarUrl);
+        setProfile((prev) => (prev ? { ...prev, avatarUrl: result.avatarUrl } : prev));
+      } else {
+        toast.error(result.message);
+        setAvatarPreview(null);
+      }
+    });
   };
 
+  const displayAvatar = avatarPreview ?? profile?.avatarUrl ?? "";
+  const initials = profile?.name
+    ? profile.name
+        .split(/\s+/)
+        .map((w) => w[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase()
+    : "?";
+
+  // ─── Loading state ─────────────────────────────────────────────────────────
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen flex-col bg-muted/30">
+        <Navbar />
+        <main className="flex flex-1 items-center justify-center">
+          <Loader2 className="size-8 animate-spin text-muted-foreground" />
+        </main>
+      </div>
+    );
+  }
+
+  if (!profile) {
+    return (
+      <div className="flex min-h-screen flex-col bg-muted/30">
+        <Navbar />
+        <main className="flex flex-1 items-center justify-center">
+          <p className="text-muted-foreground">Unable to load profile.</p>
+        </main>
+      </div>
+    );
+  }
+
+  // ─── Render ────────────────────────────────────────────────────────────────
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Navbar />
@@ -67,7 +216,57 @@ export default function EditProfilePage() {
           </div>
         </div>
 
-        <form id="edit-profile-form" onSubmit={handleSubmit} className="flex flex-col gap-6">
+        <form id="edit-profile-form" action={formAction} className="flex flex-col gap-6">
+
+          {/* Avatar Section */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Profile Photo</CardTitle>
+              <CardDescription>
+                Click the avatar to upload a new photo. Max 5 MB, JPEG/PNG/WebP/GIF.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center gap-6">
+                <button
+                  type="button"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isUploadingAvatar}
+                  className="group relative shrink-0"
+                  aria-label="Upload avatar"
+                >
+                  <Avatar className="size-20">
+                    <AvatarImage src={displayAvatar} alt={profile.name} />
+                    <AvatarFallback className="bg-indigo-100 text-2xl font-semibold text-indigo-700">
+                      {initials}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
+                    {isUploadingAvatar ? (
+                      <Loader2 className="size-5 animate-spin text-white" />
+                    ) : (
+                      <Camera className="size-5 text-white" />
+                    )}
+                  </span>
+                </button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp,image/gif"
+                  onChange={handleAvatarChange}
+                  className="hidden"
+                  aria-hidden
+                />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">{profile.name || "Your Name"}</p>
+                  <p>Click the photo to change your avatar.</p>
+                  {isUploadingAvatar && (
+                    <p className="mt-1 text-indigo-600">Uploading…</p>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           
           {/* Basic Info Section */}
           <Card>
@@ -86,9 +285,13 @@ export default function EditProfilePage() {
                   <Input
                     id="fullName"
                     name="fullName"
-                    defaultValue="Alex Johnson"
+                    defaultValue={profile.name}
                     placeholder="E.g. Jane Doe"
+                    required
                   />
+                  {state?.errors?.fullName && (
+                    <p className="text-xs text-destructive">{state.errors.fullName[0]}</p>
+                  )}
                 </div>
                 <div className="flex flex-col gap-2">
                   <label htmlFor="location" className="text-sm font-medium">
@@ -97,7 +300,7 @@ export default function EditProfilePage() {
                   <Input
                     id="location"
                     name="location"
-                    defaultValue="San Francisco, CA"
+                    defaultValue={profile.location}
                     placeholder="City, Country"
                   />
                 </div>
@@ -111,7 +314,7 @@ export default function EditProfilePage() {
                   id="bio"
                   name="bio"
                   rows={4}
-                  defaultValue="Full-stack developer passionate about building tools that help communities connect. Constantly learning and exploring new technologies. Love participating in weekend hackathons."
+                  defaultValue={profile.bio}
                   placeholder="Tell us a little bit about yourself..."
                 />
                 <p className="text-xs text-muted-foreground">
@@ -135,7 +338,7 @@ export default function EditProfilePage() {
                   <label htmlFor="availability" className="text-sm font-medium">
                     Availability
                   </label>
-                  <Select name="availability" defaultValue="looking">
+                  <Select name="availability" defaultValue={profile.availability || "looking"}>
                     <SelectTrigger id="availability">
                       <SelectValue placeholder="Select availability" />
                     </SelectTrigger>
@@ -150,40 +353,39 @@ export default function EditProfilePage() {
                   <label htmlFor="workMode" className="text-sm font-medium">
                     Work mode
                   </label>
-                  <Select name="workMode" defaultValue="remote">
+                  <Select name="workMode" defaultValue={profile.workMode || "Remote"}>
                     <SelectTrigger id="workMode">
                       <SelectValue placeholder="Select preferred work mode" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="remote">Remote only</SelectItem>
-                      <SelectItem value="hybrid">Hybrid</SelectItem>
-                      <SelectItem value="onsite">On-site</SelectItem>
-                      <SelectItem value="flexible">Flexible</SelectItem>
+                      <SelectItem value="Remote">Remote only</SelectItem>
+                      <SelectItem value="Hybrid">Hybrid</SelectItem>
+                      <SelectItem value="On-site">On-site</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="flex flex-col gap-2">
-                <label htmlFor="skills" className="text-sm font-medium">
+                <label htmlFor="skillsRaw" className="text-sm font-medium">
                   Skills (comma-separated)
                 </label>
                 <Input
-                  id="skills"
-                  name="skills"
-                  defaultValue="React, TypeScript, Node.js, Figma, Next.js, Tailwind CSS"
+                  id="skillsRaw"
+                  name="skillsRaw"
+                  defaultValue={profile.skills.join(", ")}
                   placeholder="E.g. Python, Machine Learning, UI Design"
                 />
               </div>
 
               <div className="flex flex-col gap-2">
-                <label htmlFor="interests" className="text-sm font-medium">
+                <label htmlFor="interestsRaw" className="text-sm font-medium">
                   Interests (comma-separated)
                 </label>
                 <Input
-                  id="interests"
-                  name="interests"
-                  defaultValue="Hackathons, Open Source, Climate Tech, AI / ML, Community Building"
+                  id="interestsRaw"
+                  name="interestsRaw"
+                  defaultValue={profile.interests.join(", ")}
                   placeholder="E.g. Web3, EdTech, Healthcare"
                 />
               </div>
@@ -193,7 +395,7 @@ export default function EditProfilePage() {
           {/* Social Links */}
           <Card>
             <CardHeader>
-              <CardTitle>Links & Portfolio</CardTitle>
+              <CardTitle>Links &amp; Portfolio</CardTitle>
               <CardDescription>
                 Link to your existing work and professional networks.
               </CardDescription>
@@ -207,7 +409,7 @@ export default function EditProfilePage() {
                   id="githubUrl"
                   name="githubUrl"
                   type="url"
-                  defaultValue="https://github.com/alexj"
+                  defaultValue={profile.github}
                   placeholder="https://github.com/yourusername"
                 />
               </div>
@@ -219,7 +421,7 @@ export default function EditProfilePage() {
                   id="linkedinUrl"
                   name="linkedinUrl"
                   type="url"
-                  defaultValue="https://linkedin.com/in/alexj"
+                  defaultValue={profile.linkedin}
                   placeholder="https://linkedin.com/in/yourusername"
                 />
               </div>
@@ -231,6 +433,7 @@ export default function EditProfilePage() {
                   id="portfolioUrl"
                   name="portfolioUrl"
                   type="url"
+                  defaultValue={profile.portfolio}
                   placeholder="https://yourwebsite.com"
                 />
               </div>
