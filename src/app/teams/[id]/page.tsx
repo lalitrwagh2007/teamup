@@ -1,3 +1,6 @@
+import { getTeamDetails, isTeamOwner } from "@/app/actions/team";
+
+import TeamOwnerActions from "@/components/teams/TeamOwnerActions";
 import { notFound } from "next/navigation";
 import { Briefcase, MapPin, Users } from "lucide-react";
 
