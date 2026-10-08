@@ -63,17 +63,6 @@ async function getAuthenticatedUser() {
   };
 }
 
-/**
- * Apply to a team for a specific role.
- *
- * Rules:
- * - User must be authenticated.
- * - Team and role IDs must be valid UUIDs.
- * - Team must exist.
- * - Role must belong to the selected team.
- * - Team owner cannot apply to their own team.
- * - Duplicate active applications are prevented.
- */
 export async function applyToTeam(
   input: ApplyToTeamInput,
 ): Promise<ApplicationActionResult<Application>> {
@@ -102,16 +91,7 @@ export async function applyToTeam(
       .eq("id", teamId)
       .maybeSingle();
 
-    if (teamError) {
-      console.error("Failed to fetch team:", teamError);
-
-      return {
-        success: false,
-        error: "Unable to verify the team.",
-      };
-    }
-
-    if (!team) {
+    if (teamError || !team) {
       return {
         success: false,
         error: "Team not found.",
@@ -131,16 +111,7 @@ export async function applyToTeam(
       .eq("id", roleId)
       .maybeSingle();
 
-    if (roleError) {
-      console.error("Failed to fetch role:", roleError);
-
-      return {
-        success: false,
-        error: "Unable to verify the selected role.",
-      };
-    }
-
-    if (!role) {
+    if (roleError || !role) {
       return {
         success: false,
         error: "Role not found.",
@@ -164,11 +135,6 @@ export async function applyToTeam(
         .in("status", ACTIVE_APPLICATION_STATUSES);
 
     if (existingError) {
-      console.error(
-        "Failed to check existing applications:",
-        existingError,
-      );
-
       return {
         success: false,
         error: "Unable to check your existing applications.",
@@ -200,7 +166,7 @@ export async function applyToTeam(
       .single();
 
     if (applicationError) {
-      console.error("Failed to create application:", applicationError);
+      console.error(applicationError);
 
       return {
         success: false,
@@ -222,9 +188,6 @@ export async function applyToTeam(
   }
 }
 
-/**
- * Get all applications submitted by the current user.
- */
 export async function getMyApplications(): Promise<
   ApplicationActionResult<Application[]>
 > {
@@ -247,7 +210,7 @@ export async function getMyApplications(): Promise<
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch applications:", error);
+      console.error(error);
 
       return {
         success: false,
@@ -269,11 +232,6 @@ export async function getMyApplications(): Promise<
   }
 }
 
-/**
- * Get applications for a team.
- *
- * Only the team owner is allowed to access them.
- */
 export async function getTeamApplications(
   teamId: string,
 ): Promise<ApplicationActionResult<Application[]>> {
@@ -300,16 +258,7 @@ export async function getTeamApplications(
       .eq("id", teamId)
       .maybeSingle();
 
-    if (teamError) {
-      console.error("Failed to fetch team:", teamError);
-
-      return {
-        success: false,
-        error: "Unable to verify the team.",
-      };
-    }
-
-    if (!team) {
+    if (teamError || !team) {
       return {
         success: false,
         error: "Team not found.",
@@ -332,7 +281,7 @@ export async function getTeamApplications(
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Failed to fetch team applications:", error);
+      console.error(error);
 
       return {
         success: false,
@@ -354,9 +303,8 @@ export async function getTeamApplications(
   }
 }
 
-async function updateApplicationStatus(
+export async function acceptApplication(
   applicationId: string,
-  status: "accepted" | "rejected",
 ): Promise<ApplicationActionResult<Application>> {
   try {
     if (!isValidUUID(applicationId)) {
@@ -383,22 +331,182 @@ async function updateApplicationStatus(
       .eq("id", applicationId)
       .maybeSingle();
 
-    if (applicationError) {
-      console.error(
-        "Failed to fetch application:",
-        applicationError,
-      );
-
-      return {
-        success: false,
-        error: "Unable to find the application.",
-      };
-    }
-
-    if (!application) {
+    if (applicationError || !application) {
       return {
         success: false,
         error: "Application not found.",
+      };
+    }
+
+    if (application.status !== "pending") {
+      return {
+        success: false,
+        error: "Only pending applications can be accepted.",
+      };
+    }
+
+    const { data: team, error: teamError } = await supabase
+      .from("teams")
+      .select("id, owner_id, max_members")
+      .eq("id", application.team_id)
+      .maybeSingle();
+
+    if (teamError || !team) {
+      return {
+        success: false,
+        error: "Team not found.",
+      };
+    }
+
+    if (team.owner_id !== user.id) {
+      return {
+        success: false,
+        error: "Only the team owner can accept applications.",
+      };
+    }
+
+    const { count: memberCount, error: memberCountError } =
+      await supabase
+        .from("team_members")
+        .select("id", { count: "exact", head: true })
+        .eq("team_id", application.team_id);
+
+    if (memberCountError) {
+      console.error(memberCountError);
+
+      return {
+        success: false,
+        error: "Unable to verify team capacity.",
+      };
+    }
+
+    if (
+      typeof team.max_members === "number" &&
+      (memberCount ?? 0) >= team.max_members
+    ) {
+      return {
+        success: false,
+        error: "This team is already full.",
+      };
+    }
+
+    const { data: existingMember, error: existingMemberError } =
+      await supabase
+        .from("team_members")
+        .select("id")
+        .eq("team_id", application.team_id)
+        .eq("user_id", application.applicant_id)
+        .maybeSingle();
+
+    if (existingMemberError) {
+      console.error(existingMemberError);
+
+      return {
+        success: false,
+        error: "Unable to verify team membership.",
+      };
+    }
+
+    if (existingMember) {
+      return {
+        success: false,
+        error: "This applicant is already a team member.",
+      };
+    }
+
+    const { error: memberError } = await supabase
+      .from("team_members")
+      .insert({
+        team_id: application.team_id,
+        user_id: application.applicant_id,
+        role_id: application.role_id,
+      });
+
+    if (memberError) {
+      console.error(memberError);
+
+      return {
+        success: false,
+        error: "Failed to add the applicant to the team.",
+      };
+    }
+
+    const { data: updatedApplication, error: updateError } =
+      await supabase
+        .from("applications")
+        .update({
+          status: "accepted",
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", applicationId)
+        .eq("status", "pending")
+        .select(
+          "id, applicant_id, team_id, role_id, message, status, created_at, updated_at",
+        )
+        .single();
+
+    if (updateError) {
+      console.error(updateError);
+
+      return {
+        success: false,
+        error: "Applicant was added, but the application status could not be updated.",
+      };
+    }
+
+    return {
+      success: true,
+      data: updatedApplication as Application,
+    };
+  } catch (error) {
+    console.error("acceptApplication error:", error);
+
+    return {
+      success: false,
+      error: "Something went wrong while accepting the application.",
+    };
+  }
+}
+
+export async function rejectApplication(
+  applicationId: string,
+): Promise<ApplicationActionResult<Application>> {
+  try {
+    if (!isValidUUID(applicationId)) {
+      return {
+        success: false,
+        error: "Invalid application ID.",
+      };
+    }
+
+    const { supabase, user } = await getAuthenticatedUser();
+
+    if (!user) {
+      return {
+        success: false,
+        error: "You must be logged in.",
+      };
+    }
+
+    const { data: application, error: applicationError } = await supabase
+      .from("applications")
+      .select(
+        "id, applicant_id, team_id, role_id, message, status, created_at, updated_at",
+      )
+      .eq("id", applicationId)
+      .maybeSingle();
+
+    if (applicationError || !application) {
+      return {
+        success: false,
+        error: "Application not found.",
+      };
+    }
+
+    if (application.status !== "pending") {
+      return {
+        success: false,
+        error: "Only pending applications can be rejected.",
       };
     }
 
@@ -411,21 +519,14 @@ async function updateApplicationStatus(
     if (teamError || !team) {
       return {
         success: false,
-        error: "Unable to verify the team.",
+        error: "Team not found.",
       };
     }
 
     if (team.owner_id !== user.id) {
       return {
         success: false,
-        error: "Only the team owner can manage applications.",
-      };
-    }
-
-    if (application.status !== "pending") {
-      return {
-        success: false,
-        error: "Only pending applications can be updated.",
+        error: "Only the team owner can reject applications.",
       };
     }
 
@@ -433,7 +534,7 @@ async function updateApplicationStatus(
       await supabase
         .from("applications")
         .update({
-          status,
+          status: "rejected",
           updated_at: new Date().toISOString(),
         })
         .eq("id", applicationId)
@@ -444,14 +545,11 @@ async function updateApplicationStatus(
         .single();
 
     if (updateError) {
-      console.error(
-        "Failed to update application:",
-        updateError,
-      );
+      console.error(updateError);
 
       return {
         success: false,
-        error: `Failed to ${status === "accepted" ? "accept" : "reject"} the application.`,
+        error: "Failed to reject the application.",
       };
     }
 
@@ -460,39 +558,15 @@ async function updateApplicationStatus(
       data: updatedApplication as Application,
     };
   } catch (error) {
-    console.error("updateApplicationStatus error:", error);
+    console.error("rejectApplication error:", error);
 
     return {
       success: false,
-      error: "Something went wrong while updating the application.",
+      error: "Something went wrong while rejecting the application.",
     };
   }
 }
 
-/**
- * Accept an application.
- *
- * Team membership insertion/capacity handling will be implemented
- * in the later application-management prompt.
- */
-export async function acceptApplication(
-  applicationId: string,
-): Promise<ApplicationActionResult<Application>> {
-  return updateApplicationStatus(applicationId, "accepted");
-}
-
-/**
- * Reject an application.
- */
-export async function rejectApplication(
-  applicationId: string,
-): Promise<ApplicationActionResult<Application>> {
-  return updateApplicationStatus(applicationId, "rejected");
-}
-
-/**
- * Withdraw the current user's pending application.
- */
 export async function withdrawApplication(
   applicationId: string,
 ): Promise<ApplicationActionResult<Application>> {
@@ -521,19 +595,7 @@ export async function withdrawApplication(
       .eq("id", applicationId)
       .maybeSingle();
 
-    if (fetchError) {
-      console.error(
-        "Failed to fetch application:",
-        fetchError,
-      );
-
-      return {
-        success: false,
-        error: "Unable to find the application.",
-      };
-    }
-
-    if (!application) {
+    if (fetchError || !application) {
       return {
         success: false,
         error: "Application not found.",
@@ -570,10 +632,7 @@ export async function withdrawApplication(
         .single();
 
     if (updateError) {
-      console.error(
-        "Failed to withdraw application:",
-        updateError,
-      );
+      console.error(updateError);
 
       return {
         success: false,
