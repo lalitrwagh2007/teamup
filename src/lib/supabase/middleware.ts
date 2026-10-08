@@ -58,17 +58,26 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  // Redirect unauthenticated users away from protected routes.
-  // Allow: /, /login, /signup, /forgot-password, /auth/callback, static assets
-  if (
-    !user &&
-    !request.nextUrl.pathname.startsWith("/login") &&
-    !request.nextUrl.pathname.startsWith("/signup") &&
-    !request.nextUrl.pathname.startsWith("/forgot-password") &&
-    !request.nextUrl.pathname.startsWith("/auth") &&
-    !request.nextUrl.pathname.startsWith("/_next") &&
-    request.nextUrl.pathname !== "/"
-  ) {
+  // ── Protected routes ──────────────────────────────────────────────
+  // Only these route prefixes require an authenticated session.
+  // Everything else (/, /login, /signup, /forgot-password, /explore,
+  // /teams, /teams/[id], /auth/callback, /onboarding, etc.) is public.
+  const protectedPrefixes = [
+    "/dashboard",
+    "/profile",
+    "/create-team",
+    "/applications",
+    "/notifications",
+  ];
+
+  const { pathname } = request.nextUrl;
+
+  const isProtected =
+    protectedPrefixes.some((prefix) => pathname.startsWith(prefix)) ||
+    // /teams/[id]/workspace (but NOT /teams or /teams/[id])
+    /^\/teams\/[^/]+\/workspace/.test(pathname);
+
+  if (!user && isProtected) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
@@ -76,3 +85,4 @@ export async function updateSession(request: NextRequest) {
 
   return supabaseResponse;
 }
+
