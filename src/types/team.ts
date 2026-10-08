@@ -1,38 +1,3 @@
-export interface TeamOwner {
-  id: string;
-  name: string | null;
-  avatarUrl: string | null;
-}
-
-export interface TeamMemberDetail {
-  id: string;
-  userId: string;
-  memberRole: string;
-  joinedAt: string | null;
-  profile: TeamOwner | null;
-}
-
-export interface TeamRoleSkill {
-  id: string;
-  name: string;
-}
-
-export interface TeamRoleDetail {
-  id: string;
-  title: string;
-  description: string | null;
-  spotsTotal: number;
-  spotsFilled: number;
-  status: string;
-  requiredSkills: TeamRoleSkill[];
-}
-
-export interface TeamDetails extends TeamRecord {
-  owner: TeamOwner | null;
-  members: TeamMemberDetail[];
-  roles: TeamRoleDetail[];
-  currentMembers: number;
-}
 export type TeamTrack = "technical" | "community";
 
 export type TeamStatus =
@@ -111,6 +76,18 @@ export interface TeamMemberDetail {
 export interface TeamRoleSkill {
   id: string;
   name: string;
+}
+
+export interface AvailableRoleSkill {
+  id: string;
+  name: string;
+}
+
+export interface CreateTeamRoleInput {
+  title: string;
+  description?: string | null;
+  spotsTotal: number;
+  skillIds: string[];
 }
 
 export interface TeamRoleDetail {

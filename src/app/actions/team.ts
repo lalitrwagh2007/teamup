@@ -4,7 +4,9 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
 import type {
+  AvailableRoleSkill,
   CreateTeamInput,
+  CreateTeamRoleInput,
   TeamActionResult,
   TeamDetails,
   TeamMemberDetail,
@@ -671,7 +673,224 @@ export async function getTeamDetails(
     error: null,
   };
 }
+export async function getAvailableRoleSkills(): Promise<
+  TeamActionResult<AvailableRoleSkill[]>
+> {
+  const supabase = await createClient();
 
+  const { data, error } = await supabase
+    .from("skills")
+    .select("id, name")
+    .order("name", {
+      ascending: true,
+    });
+
+  if (error) {
+    return {
+      success: false,
+      data: null,
+      error: error.message,
+    };
+  }
+
+  return {
+    success: true,
+    data: (data ?? []).map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+    })),
+    error: null,
+  };
+}
+
+export async function createTeamRole(
+  teamId: string,
+  input: CreateTeamRoleInput,
+): Promise<TeamActionResult<TeamRoleDetail>> {
+  if (!isValidUuid(teamId)) {
+    return {
+      success: false,
+      data: null,
+      error: "Invalid team ID.",
+    };
+  }
+
+  const title = input.title?.trim();
+  const description = input.description?.trim() || null;
+  const spotsTotal = Number(input.spotsTotal);
+
+  const skillIds = [
+    ...new Set(
+      (input.skillIds ?? []).filter((skillId) => isValidUuid(skillId)),
+    ),
+  ];
+
+  if (!title) {
+    return {
+      success: false,
+      data: null,
+      error: "Role title is required.",
+    };
+  }
+
+  if (title.length > 100) {
+    return {
+      success: false,
+      data: null,
+      error: "Role title must be 100 characters or fewer.",
+    };
+  }
+
+  if (description && description.length > 1000) {
+    return {
+      success: false,
+      data: null,
+      error: "Role description must be 1000 characters or fewer.",
+    };
+  }
+
+  if (!Number.isInteger(spotsTotal) || spotsTotal < 1 || spotsTotal > 100) {
+    return {
+      success: false,
+      data: null,
+      error: "Available spots must be between 1 and 100.",
+    };
+  }
+
+  const { supabase, user } = await getAuthenticatedUser();
+
+  if (!user) {
+    return {
+      success: false,
+      data: null,
+      error: "You must be signed in to create a team role.",
+    };
+  }
+
+  const { data: team, error: teamError } = await supabase
+    .from("teams")
+    .select("leader_id")
+    .eq("id", teamId)
+    .maybeSingle();
+
+  if (teamError) {
+    return {
+      success: false,
+      data: null,
+      error: teamError.message,
+    };
+  }
+
+  if (!team) {
+    return {
+      success: false,
+      data: null,
+      error: "Team not found.",
+    };
+  }
+
+  if (team.leader_id !== user.id) {
+    return {
+      success: false,
+      data: null,
+      error: "Only the team owner can create roles.",
+    };
+  }
+
+  let selectedSkills: AvailableRoleSkill[] = [];
+
+  if (skillIds.length > 0) {
+    const { data: skills, error: skillsError } = await supabase
+      .from("skills")
+      .select("id, name")
+      .in("id", skillIds);
+
+    if (skillsError) {
+      return {
+        success: false,
+        data: null,
+        error: skillsError.message,
+      };
+    }
+
+    if ((skills ?? []).length !== skillIds.length) {
+      return {
+        success: false,
+        data: null,
+        error: "One or more selected skills do not exist.",
+      };
+    }
+
+    selectedSkills = (skills ?? []).map((skill) => ({
+      id: skill.id,
+      name: skill.name,
+    }));
+  }
+
+  const { data: role, error: roleError } = await supabase
+    .from("team_roles")
+    .insert({
+      team_id: teamId,
+      title,
+      description,
+      spots_total: spotsTotal,
+      spots_filled: 0,
+      status: "open",
+    })
+    .select("id, title, description, spots_total, spots_filled, status")
+    .single();
+
+  if (roleError || !role) {
+    return {
+      success: false,
+      data: null,
+      error: roleError?.message ?? "Unable to create team role.",
+    };
+  }
+
+  if (skillIds.length > 0) {
+    const roleSkillRows = skillIds.map((skillId) => ({
+      role_id: role.id,
+      skill_id: skillId,
+    }));
+
+    const { error: roleSkillsError } = await supabase
+      .from("team_role_skills")
+      .insert(roleSkillRows);
+
+    if (roleSkillsError) {
+      await supabase
+        .from("team_roles")
+        .delete()
+        .eq("id", role.id)
+        .eq("team_id", teamId);
+
+      return {
+        success: false,
+        data: null,
+        error: roleSkillsError.message,
+      };
+    }
+  }
+
+  revalidatePath(`/teams/${teamId}`);
+  revalidatePath("/explore");
+  revalidatePath("/dashboard");
+
+  return {
+    success: true,
+    data: {
+      id: role.id,
+      title: role.title,
+      description: role.description,
+      spotsTotal: role.spots_total,
+      spotsFilled: role.spots_filled,
+      status: role.status,
+      requiredSkills: selectedSkills,
+    },
+    error: null,
+  };
+}
 export async function updateTeam(
   teamId: string,
   input: UpdateTeamInput,
