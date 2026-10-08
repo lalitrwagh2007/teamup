@@ -155,3 +155,27 @@ export async function loginAction(
   }
 }
 
+export async function logoutAction(): Promise<{ success: boolean; message?: string }> {
+  try {
+    const supabase = await createClient();
+
+    const { error } = await supabase.auth.signOut();
+
+    if (error) {
+      return {
+        success: false,
+        message: "Failed to log out. Please try again.",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Logged out successfully.",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
+  }
+}
