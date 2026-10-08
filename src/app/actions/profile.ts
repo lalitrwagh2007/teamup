@@ -158,22 +158,33 @@ function computeCompletion(profile: {
   skills: (string | UserSkillItem)[];
   interests: string[];
 }): number {
+  const hasValue = (value: string | null | undefined): boolean =>
+    Boolean(value?.trim());
+
   const checks = [
-    !!profile.full_name,
-    !!profile.username,
-    !!profile.bio,
-    !!profile.location,
-    !!profile.avatar_url,
-    !!profile.availability,
-    !!profile.work_mode,
-    !!profile.github || !!profile.linkedin || !!profile.portfolio,
-    profile.skills.length > 0,
-    profile.interests.length > 0,
+    hasValue(profile.full_name),
+    hasValue(profile.username),
+    hasValue(profile.bio),
+    hasValue(profile.location),
+    hasValue(profile.avatar_url),
+    hasValue(profile.availability),
+    hasValue(profile.work_mode),
+    hasValue(profile.github) ||
+      hasValue(profile.linkedin) ||
+      hasValue(profile.portfolio),
+    Array.isArray(profile.skills) && profile.skills.length > 0,
+    Array.isArray(profile.interests) && profile.interests.length > 0,
   ];
 
-  const filled = checks.filter(Boolean).length;
+  const completedChecks = checks.filter(Boolean).length;
 
-  return Math.round((filled / checks.length) * 100);
+  if (checks.length === 0) {
+    return 0;
+  }
+
+  const percentage = Math.round((completedChecks / checks.length) * 100);
+
+  return Math.min(100, Math.max(0, percentage));
 }
 
 /**
