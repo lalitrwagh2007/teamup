@@ -3,8 +3,15 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, Loader2, Save } from "lucide-react";
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import {
+  useActionState,
+  useEffect,
+  useRef,
+  useState,
+  useTransition,
+} from "react";
 import { toast } from "sonner";
+
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,7 +23,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+
 import UserSkillsManager from "@/components/profile/UserSkillsManager";
+import UserInterestsManager from "@/components/profile/UserInterestsManager";
+
 import {
   Card,
   CardContent,
@@ -24,19 +34,23 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+
 import {
   getCurrentProfile,
   updateProfile,
   uploadAvatarAction,
   type UpdateProfileState,
 } from "@/app/actions/profile";
+
 import type { UserProfile } from "@/types/user";
 
 export default function EditProfilePage() {
   const router = useRouter();
 
   // ─── Profile data loading ──────────────────────────────────────────────────
+
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
@@ -48,42 +62,45 @@ export default function EditProfilePage() {
         toast.error(result.message);
         router.push("/login");
       }
+
       setIsLoading(false);
     });
   }, [router]);
 
   // ─── Profile save via server action ────────────────────────────────────────
-  const [state, formAction, isSaving] = useActionState<UpdateProfileState | null, FormData>(
-    async (_prevState, formData) => {
-      const interestsRaw = (formData.get("interestsRaw") as string) ?? "";
 
-      // Map field names from the UI to what the server action expects
-      const github = formData.get("githubUrl") as string;
-      const linkedin = formData.get("linkedinUrl") as string;
-      const portfolio = formData.get("portfolioUrl") as string;
+  const [state, formAction, isSaving] = useActionState<
+    UpdateProfileState | null,
+    FormData
+  >(async (_prevState, formData) => {
+    // Map field names from the UI to what the server action expects.
+    const github = formData.get("githubUrl") as string;
+    const linkedin = formData.get("linkedinUrl") as string;
+    const portfolio = formData.get("portfolioUrl") as string;
 
-      formData.delete("githubUrl");
-      formData.delete("linkedinUrl");
-      formData.delete("portfolioUrl");
+    formData.delete("githubUrl");
+    formData.delete("linkedinUrl");
+    formData.delete("portfolioUrl");
 
-      formData.set("github", github ?? "");
-      formData.set("linkedin", linkedin ?? "");
-      formData.set("portfolio", portfolio ?? "");
+    formData.set("github", github ?? "");
+    formData.set("linkedin", linkedin ?? "");
+    formData.set("portfolio", portfolio ?? "");
 
-      const result = await updateProfile(null, formData);
-      return result;
-    },
-    null
-  );
+    const result = await updateProfile(null, formData);
+    return result;
+  }, null);
 
-  // Handle success/error toasts
+  // Handle success/error toasts.
   useEffect(() => {
     if (!state) return;
+
     if (state.success) {
       toast.success(state.message ?? "Profile updated!");
+
       if (state.profile) {
         setProfile(state.profile);
       }
+
       router.push("/profile");
     } else if (state.message) {
       toast.error(state.message);
@@ -91,39 +108,47 @@ export default function EditProfilePage() {
   }, [state, router]);
 
   // ─── Avatar upload ─────────────────────────────────────────────────────────
+
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isUploadingAvatar, startAvatarUpload] = useTransition();
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+
     if (!file) return;
 
-    // Validate client-side for immediate feedback
+    // Validate client-side for immediate feedback.
     const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+
     if (!allowedTypes.includes(file.type)) {
       toast.error("Please upload a JPEG, PNG, WebP, or GIF image.");
       return;
     }
+
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File size must be under 5 MB.");
       return;
     }
 
-    // Show local preview immediately
+    // Show local preview immediately.
     const previewUrl = URL.createObjectURL(file);
     setAvatarPreview(previewUrl);
 
-    // Upload via server action
+    // Upload via server action.
     startAvatarUpload(async () => {
       const formData = new FormData();
       formData.append("avatar", file);
+
       const result = await uploadAvatarAction(formData);
 
       if (result.success) {
         toast.success("Avatar updated!");
         setAvatarPreview(result.avatarUrl);
-        setProfile((prev) => (prev ? { ...prev, avatarUrl: result.avatarUrl } : prev));
+
+        setProfile((prev) =>
+          prev ? { ...prev, avatarUrl: result.avatarUrl } : prev,
+        );
       } else {
         toast.error(result.message);
         setAvatarPreview(null);
@@ -132,6 +157,7 @@ export default function EditProfilePage() {
   };
 
   const displayAvatar = avatarPreview ?? profile?.avatarUrl ?? "";
+
   const initials = profile?.name
     ? profile.name
         .split(/\s+/)
@@ -142,10 +168,12 @@ export default function EditProfilePage() {
     : "?";
 
   // ─── Loading state ─────────────────────────────────────────────────────────
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen flex-col bg-muted/30">
         <Navbar />
+
         <main className="flex flex-1 items-center justify-center">
           <Loader2 className="size-8 animate-spin text-muted-foreground" />
         </main>
@@ -157,6 +185,7 @@ export default function EditProfilePage() {
     return (
       <div className="flex min-h-screen flex-col bg-muted/30">
         <Navbar />
+
         <main className="flex flex-1 items-center justify-center">
           <p className="text-muted-foreground">Unable to load profile.</p>
         </main>
@@ -165,12 +194,12 @@ export default function EditProfilePage() {
   }
 
   // ─── Render ────────────────────────────────────────────────────────────────
+
   return (
     <div className="flex min-h-screen flex-col bg-muted/30">
       <Navbar />
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
-        
         {/* Header & Back link */}
         <div className="mb-6 flex flex-col gap-4">
           <Link
@@ -180,32 +209,52 @@ export default function EditProfilePage() {
             <ArrowLeft className="size-4" />
             Back to profile
           </Link>
+
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-2xl font-bold tracking-tight">Edit Profile</h1>
-              <p className="text-sm text-muted-foreground mt-1">
+              <h1 className="text-2xl font-bold tracking-tight">
+                Edit Profile
+              </h1>
+
+              <p className="mt-1 text-sm text-muted-foreground">
                 Update your personal information, skills, and links.
               </p>
             </div>
+
             <div className="hidden sm:block">
-              <Button type="submit" form="edit-profile-form" disabled={isSaving} className="gap-2">
-                {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              <Button
+                type="submit"
+                form="edit-profile-form"
+                disabled={isSaving}
+                className="gap-2"
+              >
+                {isSaving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Save className="size-4" />
+                )}
                 Save changes
               </Button>
             </div>
           </div>
         </div>
 
-        <form id="edit-profile-form" action={formAction} className="flex flex-col gap-6">
-
+        <form
+          id="edit-profile-form"
+          action={formAction}
+          className="flex flex-col gap-6"
+        >
           {/* Avatar Section */}
           <Card>
             <CardHeader>
               <CardTitle>Profile Photo</CardTitle>
+
               <CardDescription>
-                Click the avatar to upload a new photo. Max 5 MB, JPEG/PNG/WebP/GIF.
+                Click the avatar to upload a new photo. Max 5 MB,
+                JPEG/PNG/WebP/GIF.
               </CardDescription>
             </CardHeader>
+
             <CardContent>
               <div className="flex items-center gap-6">
                 <button
@@ -217,10 +266,12 @@ export default function EditProfilePage() {
                 >
                   <Avatar className="size-20">
                     <AvatarImage src={displayAvatar} alt={profile.name} />
+
                     <AvatarFallback className="bg-indigo-100 text-2xl font-semibold text-indigo-700">
                       {initials}
                     </AvatarFallback>
                   </Avatar>
+
                   <span className="absolute inset-0 flex items-center justify-center rounded-full bg-black/40 opacity-0 transition-opacity group-hover:opacity-100">
                     {isUploadingAvatar ? (
                       <Loader2 className="size-5 animate-spin text-white" />
@@ -229,6 +280,7 @@ export default function EditProfilePage() {
                     )}
                   </span>
                 </button>
+
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -237,9 +289,14 @@ export default function EditProfilePage() {
                   className="hidden"
                   aria-hidden
                 />
+
                 <div className="text-sm text-muted-foreground">
-                  <p className="font-medium text-foreground">{profile.name || "Your Name"}</p>
+                  <p className="font-medium text-foreground">
+                    {profile.name || "Your Name"}
+                  </p>
+
                   <p>Click the photo to change your avatar.</p>
+
                   {isUploadingAvatar && (
                     <p className="mt-1 text-indigo-600">Uploading…</p>
                   )}
@@ -247,21 +304,25 @@ export default function EditProfilePage() {
               </div>
             </CardContent>
           </Card>
-          
+
           {/* Basic Info Section */}
           <Card>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
+
               <CardDescription>
-                This information will be displayed publicly on your profile card.
+                This information will be displayed publicly on your profile
+                card.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="flex flex-col gap-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="fullName" className="text-sm font-medium">
                     Full name
                   </label>
+
                   <Input
                     id="fullName"
                     name="fullName"
@@ -269,14 +330,19 @@ export default function EditProfilePage() {
                     placeholder="E.g. Jane Doe"
                     required
                   />
+
                   {state?.errors?.fullName && (
-                    <p className="text-xs text-destructive">{state.errors.fullName[0]}</p>
+                    <p className="text-xs text-destructive">
+                      {state.errors.fullName[0]}
+                    </p>
                   )}
                 </div>
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="location" className="text-sm font-medium">
                     Location
                   </label>
+
                   <Input
                     id="location"
                     name="location"
@@ -290,6 +356,7 @@ export default function EditProfilePage() {
                 <label htmlFor="bio" className="text-sm font-medium">
                   Bio
                 </label>
+
                 <Textarea
                   id="bio"
                   name="bio"
@@ -297,6 +364,7 @@ export default function EditProfilePage() {
                   defaultValue={profile.bio}
                   placeholder="Tell us a little bit about yourself..."
                 />
+
                 <p className="text-xs text-muted-foreground">
                   Brief description for your profile. URLs are hyperlinked.
                 </p>
@@ -308,55 +376,60 @@ export default function EditProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Professional Details</CardTitle>
+
               <CardDescription>
-                Help teams find you based on your skills and current availability.
+                Help teams find you based on your skills and current
+                availability.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="flex flex-col gap-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 <div className="flex flex-col gap-2">
                   <label htmlFor="availability" className="text-sm font-medium">
                     Availability
                   </label>
-                  <Select name="availability" defaultValue={profile.availability || "looking"}>
+
+                  <Select
+                    name="availability"
+                    defaultValue={profile.availability || "looking"}
+                  >
                     <SelectTrigger id="availability">
                       <SelectValue placeholder="Select availability" />
                     </SelectTrigger>
+
                     <SelectContent>
                       <SelectItem value="available">Available</SelectItem>
+
                       <SelectItem value="looking">Looking for team</SelectItem>
+
                       <SelectItem value="busy">Busy / Not looking</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="workMode" className="text-sm font-medium">
                     Work mode
                   </label>
-                  <Select name="workMode" defaultValue={profile.workMode || "Remote"}>
+
+                  <Select
+                    name="workMode"
+                    defaultValue={profile.workMode || "Remote"}
+                  >
                     <SelectTrigger id="workMode">
                       <SelectValue placeholder="Select preferred work mode" />
                     </SelectTrigger>
+
                     <SelectContent>
                       <SelectItem value="Remote">Remote only</SelectItem>
+
                       <SelectItem value="Hybrid">Hybrid</SelectItem>
+
                       <SelectItem value="On-site">On-site</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-2">
-
-              <label htmlFor="interestsRaw" className="text-sm font-medium">
-                  Interests (comma-separated)
-                </label>
-                <Input
-                  id="interestsRaw"
-                  name="interestsRaw"
-                  defaultValue={profile.interests.join(", ")}
-                  placeholder="E.g. Web3, EdTech, Healthcare"
-                />
               </div>
             </CardContent>
           </Card>
@@ -368,15 +441,18 @@ export default function EditProfilePage() {
           <Card>
             <CardHeader>
               <CardTitle>Links &amp; Portfolio</CardTitle>
+
               <CardDescription>
                 Link to your existing work and professional networks.
               </CardDescription>
             </CardHeader>
+
             <CardContent className="flex flex-col gap-5">
               <div className="flex flex-col gap-2">
                 <label htmlFor="githubUrl" className="text-sm font-medium">
                   GitHub URL
                 </label>
+
                 <Input
                   id="githubUrl"
                   name="githubUrl"
@@ -385,10 +461,12 @@ export default function EditProfilePage() {
                   placeholder="https://github.com/yourusername"
                 />
               </div>
+
               <div className="flex flex-col gap-2">
                 <label htmlFor="linkedinUrl" className="text-sm font-medium">
                   LinkedIn URL
                 </label>
+
                 <Input
                   id="linkedinUrl"
                   name="linkedinUrl"
@@ -397,10 +475,12 @@ export default function EditProfilePage() {
                   placeholder="https://linkedin.com/in/yourusername"
                 />
               </div>
+
               <div className="flex flex-col gap-2">
                 <label htmlFor="portfolioUrl" className="text-sm font-medium">
                   Portfolio / Website URL
                 </label>
+
                 <Input
                   id="portfolioUrl"
                   name="portfolioUrl"
@@ -412,14 +492,24 @@ export default function EditProfilePage() {
             </CardContent>
           </Card>
 
-          {/* Mobile Submit Button (shows at bottom on small screens) */}
-          <div className="flex justify-end sm:hidden pb-10">
+          {/* Mobile Submit Button */}
+          <div className="flex justify-end pb-10 sm:hidden">
             <Button type="submit" disabled={isSaving} className="w-full gap-2">
-              {isSaving ? <Loader2 className="size-4 animate-spin" /> : <Save className="size-4" />}
+              {isSaving ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Save className="size-4" />
+              )}
               Save changes
             </Button>
           </div>
         </form>
+
+        {/* Interests have their own CRUD actions and must not be nested
+            inside the main profile form. */}
+        <div className="mt-6">
+          <UserInterestsManager />
+        </div>
       </main>
     </div>
   );

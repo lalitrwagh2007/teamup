@@ -1,13 +1,22 @@
 "use server";
 
-import { createClient } from "@/lib/supabase/server";
 import { revalidatePath } from "next/cache";
-import { getUserSkills } from "@/app/actions/skills";
-import { updateProfileSchema, type UpdateProfileInput } from "@/validations/profile.schema";
-import type { ProficiencyLevel, UserProfile, UserSkillItem } from "@/types/user";
+import { createClient } from "@/lib/supabase/server";
+
+import {
+  updateProfileSchema,
+  type UpdateProfileInput,
+} from "@/validations/profile.schema";
+
+import type {
+  ProficiencyLevel,
+  UserProfile,
+  UserSkillItem,
+} from "@/types/user";
+
 import { BUCKETS } from "@/lib/supabase/storage";
 
-// ─── Result types ───────────────────────────────────────────────────────────
+// ─── Result types ────────────────────────────────────────────────────────────
 
 export type ProfileResult =
   | { success: true; profile: UserProfile }
@@ -28,55 +37,87 @@ export type UploadAvatarResult =
 
 export type UserSkillsActionResult =
   | { success: true; message?: string; data?: UserSkillItem[] }
-  | { success: false; message: string; errors?: Record<string, string[]> };
+  | {
+      success: false;
+      message: string;
+      errors?: Record<string, string[]>;
+    };
 
-// ─── updateUserSkills (real Supabase) ───────────────────────────────────────
+// ─── updateUserSkills ────────────────────────────────────────────────────────
 
 /**
- * Replaces the authenticated user's skill mappings with the provided list,
- * respecting ownership (auth.uid()) and reusing existing skill records.
+ * Updates the authenticated user's skill mappings.
  *
- * Duplicate user_skills mappings are prevented by the composite primary key
- * (user_id, skill_id) and by upserting with { onConflict: "user_id,skill_id" }.
+ * Ownership is enforced through the authenticated user's ID.
+ * Existing mappings are updated through the composite key.
  */
 export async function updateUserSkills(
-  skills: { skillId: string; proficiency: ProficiencyLevel }[]
+  skills: {
+    skillId: string;
+    proficiency: ProficiencyLevel;
+  }[],
 ): Promise<UserSkillsActionResult> {
   try {
     const supabase = await createClient();
 
-    // 1. Authenticate & enforce ownership using auth.uid()
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
+    // 1. Authenticate
+    const {
+      data: { user },
+      error: authError,
+    } = await supabase.auth.getUser();
+
     if (authError || !user) {
-      return { success: false, message: "You must be logged in to update skills." };
+      return {
+        success: false,
+        message: "You must be logged in to update skills.",
+      };
     }
 
-    // 2. Server-side validation: every proficiency must be an exact enum value
-    const invalid = skills.some((s) => !(["Beginner", "Intermediate", "Advanced", "Expert"] as readonly ProficiencyLevel[]).includes(s.proficiency));
+    // 2. Validate proficiency values
+    const validProficiencyLevels: readonly ProficiencyLevel[] = [
+      "Beginner",
+      "Intermediate",
+      "Advanced",
+      "Expert",
+    ];
+
+    const invalid = skills.some(
+      (skill) => !validProficiencyLevels.includes(skill.proficiency),
+    );
+
     if (invalid) {
-      return { success: false, message: "Invalid proficiency level provided." };
+      return {
+        success: false,
+        message: "Invalid proficiency level provided.",
+      };
     }
 
     if (skills.length === 0) {
-      return { success: true, message: "No skills to update.", data: [] };
+      return {
+        success: true,
+        message: "No skills to update.",
+        data: [],
+      };
     }
 
-    // 3. Upsert each skill mapping. If a mapping already exists, its proficiency is updated;
-    //    if it is new, it is inserted. This is scoped strictly to auth.uid().
+    // 3. Upsert each skill mapping
     for (const { skillId, proficiency } of skills) {
-      const { error: upsertError } = await supabase
-        .from("user_skills")
-        .upsert(
-          {
-            user_id: user.id,
-            skill_id: skillId,
-            proficiency: proficiency,
-          },
-          { onConflict: "user_id,skill_id" }
-        );
+      const { error: upsertError } = await supabase.from("user_skills").upsert(
+        {
+          user_id: user.id,
+          skill_id: skillId,
+          proficiency,
+        },
+        {
+          onConflict: "user_id,skill_id",
+        },
+      );
 
       if (upsertError) {
-        return { success: false, message: "Failed to update skills. Please try again." };
+        return {
+          success: false,
+          message: "Failed to update skills. Please try again.",
+        };
       }
     }
 
@@ -84,19 +125,25 @@ export async function updateUserSkills(
     revalidatePath("/profile/edit");
 
     const updatedUserSkillsResult = await getUserSkills(user.id);
+
     return {
       success: true,
       message: "Skills updated successfully.",
-      data: updatedUserSkillsResult.success ? updatedUserSkillsResult.data : [],
+      data: updatedUserSkillsResult.data,
     };
   } catch {
-    return { success: false, message: "An unexpected error occurred. Please try again later." };
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
 }
 
-// ─── Helpers ────────────────────────────────────────────────────────────────
+// ─── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Compute a rough profile-completion percentage based on filled fields. */
+/**
+ * Compute a rough profile-completion percentage based on filled fields.
+ */
 function computeCompletion(profile: {
   full_name: string | null;
   username: string | null;
@@ -125,10 +172,13 @@ function computeCompletion(profile: {
   ];
 
   const filled = checks.filter(Boolean).length;
+
   return Math.round((filled / checks.length) * 100);
 }
 
-/** Map a DB profile row + skills/interests arrays into the UserProfile type. */
+/**
+ * Map a DB profile row + skills/interests arrays into UserProfile.
+ */
 function toUserProfile(
   row: {
     id: string;
@@ -145,7 +195,7 @@ function toUserProfile(
   },
   skills: (string | UserSkillItem)[],
   interests: string[],
-  userSkills?: UserSkillItem[]
+  userSkills?: UserSkillItem[],
 ): UserProfile {
   return {
     id: row.id,
@@ -162,31 +212,77 @@ function toUserProfile(
     skills,
     userSkills,
     interests,
-    profileCompletion: computeCompletion({ ...row, skills, interests }),
+    profileCompletion: computeCompletion({
+      ...row,
+      skills,
+      interests,
+    }),
+  };
+}
+
+// ─── getUserSkills ───────────────────────────────────────────────────────────
+
+async function getUserSkills(userId: string): Promise<{
+  data: UserSkillItem[];
+}> {
+  const supabase = await createClient();
+
+  const { data } = await supabase
+    .from("user_skills")
+    .select("skill_id, proficiency, skills(id, name, category)")
+    .eq("user_id", userId);
+
+  const skills: UserSkillItem[] = [];
+
+  for (const row of data ?? []) {
+    const rawRow = row as Record<string, unknown>;
+
+    const skill = rawRow.skills as {
+      id: string;
+      name: string;
+      category?: string | null;
+    } | null;
+
+    if (!skill) {
+      continue;
+    }
+
+    const userSkill: UserSkillItem = {
+      skillId: skill.id,
+      name: skill.name,
+      proficiency: (rawRow.proficiency as ProficiencyLevel) || "Intermediate",
+      category: skill.category ?? "",
+    };
+
+    skills.push(userSkill);
+  }
+
+  return {
+    data: skills,
   };
 }
 
 // ─── getCurrentProfile ──────────────────────────────────────────────────────
 
 /**
- * Retrieves the authenticated user's profile, including their skills and
- * interests resolved from the junction tables.
- *
- * Ownership is enforced by using the authenticated user's `auth.uid()` —
- * no user ID parameter is accepted.
+ * Retrieves the authenticated user's profile, including skills
+ * and interests resolved from their junction tables.
  */
 export async function getCurrentProfile(): Promise<ProfileResult> {
   try {
     const supabase = await createClient();
 
-    // 1. Authenticate — never trust a client-supplied ID
+    // 1. Authenticate
     const {
       data: { user },
       error: authError,
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { success: false, message: "You must be logged in to view your profile." };
+      return {
+        success: false,
+        message: "You must be logged in to view your profile.",
+      };
     }
 
     // 2. Fetch the profile row
@@ -197,52 +293,78 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
       .single();
 
     if (profileError || !profile) {
-      return { success: false, message: "Profile not found." };
+      return {
+        success: false,
+        message: "Profile not found.",
+      };
     }
 
-    // 3. Fetch the user's skills (via junction table with proficiency)
+    // 3. Fetch the user's skills
     const { data: userSkillsRaw } = await supabase
       .from("user_skills")
       .select("skill_id, proficiency, skills(id, name, category)")
       .eq("user_id", user.id);
 
-    const detailedSkills: UserSkillItem[] = (userSkillsRaw ?? []).flatMap((row: Record<string, unknown>) => {
-      const s = row.skills as {
+    const detailedSkills: UserSkillItem[] = [];
+
+    for (const row of userSkillsRaw ?? []) {
+      const rawRow = row as Record<string, unknown>;
+
+      const skill = rawRow.skills as {
         id: string;
         name: string;
         category?: string | null;
       } | null;
 
-      if (!s) return [];
+      if (!skill) {
+        continue;
+      }
 
-      return [{
-        skillId: s.id,
-        name: s.name,
-        proficiency: (row.proficiency as ProficiencyLevel) || "Intermediate",
-        category: s.category ?? null,
-      }];
-    });
+      const userSkill: UserSkillItem = {
+        skillId: skill.id,
+        name: skill.name,
+        proficiency: (rawRow.proficiency as ProficiencyLevel) || "Intermediate",
+        category: skill.category ?? "",
+      };
 
-    // 4. Fetch the user's interests (via junction table)
+      detailedSkills.push(userSkill);
+    }
+
+    // 4. Fetch the user's interests
     const { data: userInterests } = await supabase
       .from("user_interests")
       .select("interest_id, interests(name)")
       .eq("user_id", user.id);
 
-    const interests: string[] = (userInterests ?? [])
-      .map((row: Record<string, unknown>) => {
-        const i = row.interests as { name: string } | null;
-        return i?.name ?? null;
-      })
-      .filter((name): name is string => name !== null);
+    const interests: string[] = [];
 
-    // 5. Map to the UserProfile type
+    for (const row of userInterests ?? []) {
+      const rawRow = row as Record<string, unknown>;
+
+      const interest = rawRow.interests as {
+        name: string;
+      } | null;
+
+      if (interest?.name) {
+        interests.push(interest.name);
+      }
+    }
+
+    // 5. Map to UserProfile
     return {
       success: true,
-      profile: toUserProfile(profile, detailedSkills, interests, detailedSkills),
+      profile: toUserProfile(
+        profile,
+        detailedSkills,
+        interests,
+        detailedSkills,
+      ),
     };
   } catch {
-    return { success: false, message: "An unexpected error occurred. Please try again later." };
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
 }
 
@@ -251,16 +373,18 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
 /**
  * Updates the authenticated user's profile.
  *
- * Ownership is enforced by scoping the update to `auth.uid()`. The user
- * can never supply a target user ID — it is always derived from the
- * authenticated session.
+ * Skills and interests are intentionally NOT modified here.
+ * They have their own dedicated CRUD managers:
  *
- * Skills and interests are synced via a delete-and-reinsert strategy on
- * the junction tables, within the same request.
+ * - UserSkillsManager
+ * - UserInterestsManager
+ *
+ * This prevents saving the main profile form from accidentally
+ * deleting existing skills or interests.
  */
 export async function updateProfile(
   _prevState: UpdateProfileState | null,
-  formData: FormData
+  formData: FormData,
 ): Promise<UpdateProfileState> {
   try {
     const supabase = await createClient();
@@ -272,10 +396,17 @@ export async function updateProfile(
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { success: false, message: "You must be logged in to update your profile." };
+      return {
+        success: false,
+        message: "You must be logged in to update your profile.",
+      };
     }
 
-    // 2. Parse & validate input
+    // 2. Parse & validate profile fields
+    //
+    // Empty skills/interests arrays are supplied only because the
+    // existing validation schema expects those fields.
+    // They are NOT written to the database here.
     const rawData = {
       fullName: formData.get("fullName") as string,
       username: (formData.get("username") as string) || undefined,
@@ -286,25 +417,37 @@ export async function updateProfile(
       github: (formData.get("github") as string) || undefined,
       linkedin: (formData.get("linkedin") as string) || undefined,
       portfolio: (formData.get("portfolio") as string) || undefined,
-      skills: formData.getAll("skills").map(String).filter(Boolean),
-      interests: formData.getAll("interests").map(String).filter(Boolean),
+      skills: [],
+      interests: [],
     };
 
     const validation = updateProfileSchema.safeParse(rawData);
 
     if (!validation.success) {
       const fieldErrors = validation.error.flatten().fieldErrors;
+
       return {
         success: false,
         message: "Please fix the errors in the form.",
-        errors: fieldErrors as Partial<Record<keyof UpdateProfileInput, string[]>>,
+        errors: fieldErrors as Partial<
+          Record<keyof UpdateProfileInput, string[]>
+        >,
       };
     }
 
-    const { fullName, username, bio, location, availability, workMode, github, linkedin, portfolio, skills, interests } =
-      validation.data;
+    const {
+      fullName,
+      username,
+      bio,
+      location,
+      availability,
+      workMode,
+      github,
+      linkedin,
+      portfolio,
+    } = validation.data;
 
-    // 3. Update the profiles row — scoped to the authenticated user's ID
+    // 3. Update only the authenticated user's profile row
     const { error: updateError } = await supabase
       .from("profiles")
       .update({
@@ -322,86 +465,39 @@ export async function updateProfile(
       .eq("id", user.id);
 
     if (updateError) {
-      // Handle unique constraint on username
-      if (updateError.code === "23505" && updateError.message?.includes("username")) {
+      if (
+        updateError.code === "23505" &&
+        updateError.message?.includes("username")
+      ) {
         return {
           success: false,
           message: "This username is already taken.",
-          errors: { username: ["This username is already taken."] },
+          errors: {
+            username: ["This username is already taken."],
+          },
         };
       }
-      return { success: false, message: "Failed to update profile. Please try again." };
+
+      return {
+        success: false,
+        message: "Failed to update profile. Please try again.",
+      };
     }
 
-    // 4. Sync skills — delete existing, then insert new ones
-    await supabase.from("user_skills").delete().eq("user_id", user.id);
+    // Skills and interests are intentionally NOT modified here.
 
-    if (skills.length > 0) {
-      // Upsert skill names into the skills table, then link them
-      for (const skillName of skills) {
-        // Get or create the skill
-        const { data: existingSkill } = await supabase
-          .from("skills")
-          .select("id")
-          .eq("name", skillName)
-          .single();
-
-        let skillId: string;
-        if (existingSkill) {
-          skillId = existingSkill.id;
-        } else {
-          const { data: newSkill } = await supabase
-            .from("skills")
-            .insert({ name: skillName })
-            .select("id")
-            .single();
-          if (!newSkill) continue;
-          skillId = newSkill.id;
-        }
-
-        await supabase.from("user_skills").insert({
-          user_id: user.id,
-          skill_id: skillId,
-        });
-      }
-    }
-
-    // 5. Sync interests — delete existing, then insert new ones
-    await supabase.from("user_interests").delete().eq("user_id", user.id);
-
-    if (interests.length > 0) {
-      for (const interestName of interests) {
-        const { data: existingInterest } = await supabase
-          .from("interests")
-          .select("id")
-          .eq("name", interestName)
-          .single();
-
-        let interestId: string;
-        if (existingInterest) {
-          interestId = existingInterest.id;
-        } else {
-          const { data: newInterest } = await supabase
-            .from("interests")
-            .insert({ name: interestName })
-            .select("id")
-            .single();
-          if (!newInterest) continue;
-          interestId = newInterest.id;
-        }
-
-        await supabase.from("user_interests").insert({
-          user_id: user.id,
-          interest_id: interestId,
-        });
-      }
-    }
-
-    // 6. Re-fetch the full profile to return updated data
+    // 4. Re-fetch the full profile
     const result = await getCurrentProfile();
+
     if (!result.success) {
-      return { success: false, message: result.message };
+      return {
+        success: false,
+        message: result.message,
+      };
     }
+
+    revalidatePath("/profile");
+    revalidatePath("/profile/edit");
 
     return {
       success: true,
@@ -409,22 +505,33 @@ export async function updateProfile(
       profile: result.profile,
     };
   } catch {
-    return { success: false, message: "An unexpected error occurred. Please try again later." };
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
 }
 
 // ─── uploadAvatarAction ─────────────────────────────────────────────────────
 
-const ALLOWED_IMAGE_TYPES = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-const MAX_FILE_SIZE = 5 * 1024 * 1024; // 5 MB
+const ALLOWED_IMAGE_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/gif",
+];
+
+const MAX_FILE_SIZE = 5 * 1024 * 1024;
 
 /**
  * Uploads an avatar image for the authenticated user.
  *
- * Ownership is enforced: the file is stored under `profiles/{auth.uid()}/avatar`
- * and the avatar_url is only updated on the user's own profile row.
+ * Ownership is enforced by storing the file under:
+ * profiles/{auth.uid()}/avatar
  */
-export async function uploadAvatarAction(formData: FormData): Promise<UploadAvatarResult> {
+export async function uploadAvatarAction(
+  formData: FormData,
+): Promise<UploadAvatarResult> {
   try {
     const supabase = await createClient();
 
@@ -435,25 +542,37 @@ export async function uploadAvatarAction(formData: FormData): Promise<UploadAvat
     } = await supabase.auth.getUser();
 
     if (authError || !user) {
-      return { success: false, message: "You must be logged in to upload an avatar." };
+      return {
+        success: false,
+        message: "You must be logged in to upload an avatar.",
+      };
     }
 
     // 2. Validate the file
     const file = formData.get("avatar") as File | null;
 
     if (!file || file.size === 0) {
-      return { success: false, message: "No file selected." };
+      return {
+        success: false,
+        message: "No file selected.",
+      };
     }
 
     if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
-      return { success: false, message: "Please upload a JPEG, PNG, WebP, or GIF image." };
+      return {
+        success: false,
+        message: "Please upload a JPEG, PNG, WebP, or GIF image.",
+      };
     }
 
     if (file.size > MAX_FILE_SIZE) {
-      return { success: false, message: "File size must be under 5 MB." };
+      return {
+        success: false,
+        message: "File size must be under 5 MB.",
+      };
     }
 
-    // 3. Upload to Supabase Storage — scoped to this user's folder
+    // 3. Upload to Supabase Storage
     const fileExt = file.name.split(".").pop() ?? "jpg";
     const filePath = `profiles/${user.id}/avatar.${fileExt}`;
 
@@ -465,7 +584,10 @@ export async function uploadAvatarAction(formData: FormData): Promise<UploadAvat
       });
 
     if (uploadError) {
-      return { success: false, message: "Failed to upload avatar. Please try again." };
+      return {
+        success: false,
+        message: "Failed to upload avatar. Please try again.",
+      };
     }
 
     // 4. Get the public URL
@@ -475,18 +597,33 @@ export async function uploadAvatarAction(formData: FormData): Promise<UploadAvat
 
     const avatarUrl = publicUrlData.publicUrl;
 
-    // 5. Update the profile row — scoped to auth.uid()
+    // 5. Update the authenticated user's profile
     const { error: updateError } = await supabase
       .from("profiles")
-      .update({ avatar_url: avatarUrl, updated_at: new Date().toISOString() })
+      .update({
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", user.id);
 
     if (updateError) {
-      return { success: false, message: "Avatar uploaded but failed to update profile." };
+      return {
+        success: false,
+        message: "Avatar uploaded but failed to update profile.",
+      };
     }
 
-    return { success: true, avatarUrl };
+    revalidatePath("/profile");
+    revalidatePath("/profile/edit");
+
+    return {
+      success: true,
+      avatarUrl,
+    };
   } catch {
-    return { success: false, message: "An unexpected error occurred. Please try again later." };
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
 }
