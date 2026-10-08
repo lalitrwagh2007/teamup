@@ -1,5 +1,5 @@
 "use client";
-
+import NotificationBell from "@/components/notifications/NotificationBell";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -163,7 +163,6 @@ export default function Navbar() {
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border bg-background/90 backdrop-blur supports-backdrop-filter:backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-7xl items-center justify-between gap-6 px-4 sm:px-6 lg:px-8">
-
         {/* ── Logo ────────────────────────────────────────────────────────── */}
         <Link
           href="/"
@@ -195,9 +194,9 @@ export default function Navbar() {
 
         {/* ── Right: desktop auth + mobile trigger ─────────────────────────── */}
         <div className="flex items-center gap-2">
-
           {/* Desktop auth area */}
           <div className="hidden items-center gap-2 md:flex">
+            {!isLoading && user && <NotificationBell />}
             {isLoading ? (
               /* Skeleton placeholder while checking auth */
               <div className="size-8 animate-pulse rounded-full bg-muted" />
@@ -229,7 +228,9 @@ export default function Navbar() {
                   </div>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
-                    render={<Link href="/dashboard" className="cursor-pointer" />}
+                    render={
+                      <Link href="/dashboard" className="cursor-pointer" />
+                    }
                   >
                     <Home className="mr-2 size-4" />
                     Dashboard
@@ -338,7 +339,7 @@ export default function Navbar() {
                           className={cn(
                             "inline-flex h-8 w-full items-center justify-center rounded-lg border border-border",
                             "bg-background text-sm font-medium text-foreground",
-                            "transition-colors hover:bg-muted"
+                            "transition-colors hover:bg-muted",
                           )}
                         />
                       }
@@ -354,7 +355,7 @@ export default function Navbar() {
                         "inline-flex h-8 w-full items-center justify-center gap-2 rounded-lg",
                         "bg-red-50 text-sm font-medium text-red-600",
                         "transition-colors hover:bg-red-100",
-                        "disabled:opacity-50"
+                        "disabled:opacity-50",
                       )}
                     >
                       <LogOut className="size-4" />
@@ -370,7 +371,7 @@ export default function Navbar() {
                           className={cn(
                             "inline-flex h-8 w-full items-center justify-center rounded-lg border border-border",
                             "bg-background text-sm font-medium text-foreground",
-                            "transition-colors hover:bg-muted"
+                            "transition-colors hover:bg-muted",
                           )}
                         />
                       }

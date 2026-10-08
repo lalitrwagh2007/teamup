@@ -23,6 +23,7 @@ export interface TeamCardProps {
   skills: string[];
   mode: string;
   location?: string;
+  matchScore?: number;
 }
 
 export default function TeamCard({
@@ -35,6 +36,7 @@ export default function TeamCard({
   skills,
   mode,
   location,
+  matchScore,
 }: TeamCardProps) {
   return (
     <Card className="flex h-full flex-col transition-shadow hover:shadow-md">
@@ -42,9 +44,17 @@ export default function TeamCard({
         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
           <CardTitle className="text-lg font-semibold">{name}</CardTitle>
 
-          <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
-            {category}
-          </span>
+          <div className="flex flex-wrap gap-2">
+            <span className="w-fit rounded-full bg-muted px-2.5 py-1 text-xs font-medium">
+              {category}
+            </span>
+
+            {matchScore !== undefined && (
+              <span className="w-fit rounded-full bg-primary/10 px-2.5 py-1 text-xs font-semibold text-primary">
+                {matchScore}% Match
+              </span>
+            )}
+          </div>
         </div>
 
         <CardDescription className="line-clamp-3">

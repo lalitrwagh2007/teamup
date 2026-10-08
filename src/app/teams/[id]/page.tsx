@@ -1,3 +1,4 @@
+
 import { notFound } from "next/navigation";
 import { Briefcase, MapPin, Users } from "lucide-react";
 
