@@ -1,3 +1,5 @@
+import { ApplicationStatus, InvitationStatus, MemberRole, TeamRoleStatus, TeamStatus, TeamTrack, WorkMode } from "./database";
+
 export interface UserProfile {
   id: string;
   name: string;
@@ -8,9 +10,23 @@ export interface UserProfile {
   skills: string[];
   interests: string[];
   availability: string;
-  workMode: "Remote" | "Hybrid" | "On-site";
+  workMode: WorkMode;
   github: string;
   linkedin: string;
   portfolio: string;
   profileCompletion: number;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  category?: string | null;
+  createdAt?: string;
+}
+
+export interface Interest {
+  id: string;
+  name: string;
+  category?: string | null;
+  createdAt?: string;
 }
