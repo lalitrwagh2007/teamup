@@ -1,7 +1,8 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { signupSchema, SignupInput } from "@/validations/auth.schema";
+import { signupSchema, SignupInput, loginSchema, LoginInput } from "@/validations/auth.schema";
+
 
 export type SignupState = {
   success: boolean;
@@ -84,3 +85,73 @@ export async function signUpAction(
     };
   }
 }
+export type LoginState = {
+  success: boolean;
+  message?: string;
+  errors?: {
+    email?: string[];
+    password?: string[];
+  };
+};
+
+export async function loginAction(
+  prevState: LoginState | null,
+  formData: FormData
+): Promise<LoginState> {
+  const rawData = {
+    email: formData.get("email") as string,
+    password: formData.get("password") as string,
+  };
+
+  const validation = loginSchema.safeParse(rawData);
+
+  if (!validation.success) {
+    const fieldErrors = validation.error.flatten().fieldErrors;
+    return {
+      success: false,
+      message: "Please fill in all required fields.",
+      errors: fieldErrors,
+    };
+  }
+
+  const { email, password } = validation.data;
+
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    });
+
+    if (error) {
+      let userFriendlyMessage = "Invalid email or password.";
+      if (error.message.includes("Email not confirmed")) {
+        userFriendlyMessage = "Please confirm your email address before logging in.";
+      }
+
+      return {
+        success: false,
+        message: userFriendlyMessage,
+      };
+    }
+
+    if (!data.user) {
+      return {
+        success: false,
+        message: "Unable to sign in. Please try again.",
+      };
+    }
+
+    return {
+      success: true,
+      message: "Logged in successfully!",
+    };
+  } catch (err) {
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
+  }
+}
+
