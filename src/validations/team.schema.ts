@@ -1,0 +1,1 @@
+// Team validation schema
