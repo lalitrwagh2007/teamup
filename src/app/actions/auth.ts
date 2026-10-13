@@ -1,7 +1,7 @@
 "use server";
 
 import { createClient } from "@/lib/supabase/server";
-import { signupSchema, SignupInput, loginSchema, LoginInput } from "@/validations/auth.schema";
+import { signupSchema, loginSchema } from "@/validations/auth.schema";
 
 
 export type SignupState = {
@@ -78,13 +78,14 @@ export async function signUpAction(
       success: true,
       message: "Account created successfully!",
     };
-  } catch (err) {
-    return {
-      success: false,
-      message: "An unexpected error occurred. Please try again later.",
-    };
+} catch {
+      return {
+        success: false,
+        message: "An unexpected error occurred. Please try again later.",
+      };
+    }
   }
-}
+
 export type LoginState = {
   success: boolean;
   message?: string;
@@ -147,13 +148,13 @@ export async function loginAction(
       success: true,
       message: "Logged in successfully!",
     };
-  } catch (err) {
-    return {
-      success: false,
-      message: "An unexpected error occurred. Please try again later.",
-    };
+} catch {
+      return {
+        success: false,
+        message: "An unexpected error occurred. Please try again later.",
+      };
+    }
   }
-}
 
 export async function logoutAction(): Promise<{ success: boolean; message?: string }> {
   try {
@@ -172,10 +173,10 @@ export async function logoutAction(): Promise<{ success: boolean; message?: stri
       success: true,
       message: "Logged out successfully.",
     };
-  } catch (err) {
-    return {
-      success: false,
-      message: "An unexpected error occurred. Please try again later.",
-    };
+} catch {
+      return {
+        success: false,
+        message: "An unexpected error occurred. Please try again later.",
+      };
+    }
   }
-}

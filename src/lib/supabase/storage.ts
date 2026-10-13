@@ -1,5 +1,4 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { createClient as createBrowserClient } from "@/lib/supabase/client";
 
 export const BUCKETS = {
   AVATARS: "avatars",

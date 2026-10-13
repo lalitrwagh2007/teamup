@@ -4,7 +4,6 @@ import { Users, XCircle } from "lucide-react";
 
 import { getInvitationByToken } from "@/app/actions/invitation";
 import { createClient } from "@/lib/supabase/server";
-import { Button } from "@/components/ui/button";
 import InvitationActions from "@/components/teams/InvitationActions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 

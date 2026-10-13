@@ -91,16 +91,11 @@ export default function EditProfilePage() {
   }, null);
 
   // Handle success/error toasts.
-  useEffect(() => {
+useEffect(() => {
     if (!state) return;
 
     if (state.success) {
       toast.success(state.message ?? "Profile updated!");
-
-      if (state.profile) {
-        setProfile(state.profile);
-      }
-
       router.push("/profile");
     } else if (state.message) {
       toast.error(state.message);
