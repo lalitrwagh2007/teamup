@@ -1,9 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Users, Loader2, ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,17 +14,7 @@ const initialState: LoginState = {
 };
 
 export default function LoginPage() {
-  const router = useRouter();
   const [state, formAction, isPending] = useActionState(loginAction, initialState);
-
-  useEffect(() => {
-    if (state.success) {
-      toast.success(state.message || "Logged in successfully!");
-      router.push("/dashboard");
-    } else if (state.message) {
-      toast.error(state.message);
-    }
-  }, [state, router]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 sm:p-6 lg:p-8">
@@ -112,6 +100,12 @@ export default function LoginPage() {
                   </>
                 )}
               </Button>
+
+              {state.message && !state.success && (
+                <p className="text-sm text-center text-destructive" role="alert">
+                  {state.message}
+                </p>
+              )}
             </form>
           </CardContent>
 

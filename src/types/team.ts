@@ -42,6 +42,7 @@ export interface TeamRecord {
   status: TeamStatus;
   createdAt: string;
   updatedAt: string;
+  currentMembers?: number;
 }
 
 export interface CreateTeamInput {

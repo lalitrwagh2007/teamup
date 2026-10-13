@@ -1,5 +1,6 @@
 "use server";
 
+import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { signupSchema, loginSchema } from "@/validations/auth.schema";
 
@@ -39,52 +40,50 @@ export async function signUpAction(
 
   const { fullName, email, password } = validation.data;
 
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
 
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-        },
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: {
+        full_name: fullName,
       },
-    });
+    },
+  });
 
-    if (error) {
-      // Map standard Supabase error messages to user-friendly text
-      let userFriendlyMessage = "Failed to create account. Please try again.";
-      if (error.message.includes("already registered")) {
-        userFriendlyMessage = "An account with this email already exists.";
-      } else if (error.message.includes("Password")) {
-        userFriendlyMessage = error.message;
-      }
-
-      return {
-        success: false,
-        message: userFriendlyMessage,
-      };
+  if (error) {
+    let userFriendlyMessage = "Failed to create account. Please try again.";
+    if (error.message.includes("already registered")) {
+      userFriendlyMessage = "An account with this email already exists.";
+    } else if (error.message.includes("Password")) {
+      userFriendlyMessage = error.message;
     }
 
-    if (!data.user) {
-      return {
-        success: false,
-        message: "Unable to complete registration. Please try again.",
-      };
-    }
+    console.error("Supabase signup error:", error);
 
     return {
-      success: true,
-      message: "Account created successfully!",
+      success: false,
+      message: userFriendlyMessage,
     };
-} catch {
-      return {
-        success: false,
-        message: "An unexpected error occurred. Please try again later.",
-      };
-    }
   }
+
+  if (!data.user) {
+    return {
+      success: false,
+      message: "Unable to complete registration. Please try again.",
+    };
+  }
+
+  if (data.session) {
+    redirect("/onboarding");
+  }
+
+  return {
+    success: true,
+    message: "Account created successfully! Please check your email to confirm.",
+  };
+}
 
 export type LoginState = {
   success: boolean;
@@ -117,44 +116,34 @@ export async function loginAction(
 
   const { email, password } = validation.data;
 
-  try {
-    const supabase = await createClient();
+  const supabase = await createClient();
 
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+  const { data, error } = await supabase.auth.signInWithPassword({
+    email,
+    password,
+  });
 
-    if (error) {
-      let userFriendlyMessage = "Invalid email or password.";
-      if (error.message.includes("Email not confirmed")) {
-        userFriendlyMessage = "Please confirm your email address before logging in.";
-      }
-
-      return {
-        success: false,
-        message: userFriendlyMessage,
-      };
-    }
-
-    if (!data.user) {
-      return {
-        success: false,
-        message: "Unable to sign in. Please try again.",
-      };
+  if (error) {
+    let userFriendlyMessage = "Invalid email or password.";
+    if (error.message.includes("Email not confirmed")) {
+      userFriendlyMessage = "Please confirm your email address before logging in.";
     }
 
     return {
-      success: true,
-      message: "Logged in successfully!",
+      success: false,
+      message: userFriendlyMessage,
     };
-} catch {
-      return {
-        success: false,
-        message: "An unexpected error occurred. Please try again later.",
-      };
-    }
   }
+
+  if (!data.user) {
+    return {
+      success: false,
+      message: "Unable to sign in. Please try again.",
+    };
+  }
+
+  redirect("/dashboard");
+}
 
 export async function logoutAction(): Promise<{ success: boolean; message?: string }> {
   try {
@@ -173,10 +162,10 @@ export async function logoutAction(): Promise<{ success: boolean; message?: stri
       success: true,
       message: "Logged out successfully.",
     };
-} catch {
-      return {
-        success: false,
-        message: "An unexpected error occurred. Please try again later.",
-      };
-    }
+  } catch {
+    return {
+      success: false,
+      message: "An unexpected error occurred. Please try again later.",
+    };
   }
+}
