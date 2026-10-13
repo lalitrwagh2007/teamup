@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Briefcase, Edit, ExternalLink, Code, Globe, Users } from "lucide-react";
+import { Edit, ExternalLink, Code, Globe, Users } from "lucide-react";
 import Navbar from "@/components/layout/Navbar";
 import ProfileCard, { type AvailabilityStatus } from "@/components/profile/ProfileCard";
 import SkillTags from "@/components/profile/SkillTags";
@@ -18,27 +18,6 @@ function parseAvailability(val: string | null | undefined): AvailabilityStatus {
   }
   return "Looking for team";
 }
-
-// ─── Static experience data (not stored in profiles table) ───────────────────
-
-const MOCK_EXPERIENCE = [
-  {
-    id: 1,
-    title: "Frontend Developer",
-    organization: "TechNova Solutions",
-    duration: "Jan 2024 - Present",
-    description:
-      "Building responsive web applications using React and Next.js. Improved core web vitals and overall performance by 30%.",
-  },
-  {
-    id: 2,
-    title: "Open Source Contributor",
-    organization: "Various Projects",
-    duration: "2023 - Present",
-    description:
-      "Contributed to multiple popular open-source repositories by fixing bugs, improving documentation, and adding new UI components.",
-  },
-];
 
 // ─── Page Component ──────────────────────────────────────────────────────────
 
@@ -123,45 +102,9 @@ export default async function ProfilePage() {
             )}
           </div>
 
-          {/* Right Column: Experience & Interests */}
+          {/* Right Column: Interests */}
           <div className="flex flex-col gap-6 lg:col-span-2">
             
-            {/* Experience */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Experience</CardTitle>
-              </CardHeader>
-              <CardContent className="flex flex-col gap-6">
-                {MOCK_EXPERIENCE.map((exp, index) => (
-                  <div key={exp.id} className="relative pl-6">
-                    {/* Timeline line */}
-                    {index !== MOCK_EXPERIENCE.length - 1 && (
-                      <div className="absolute left-[11px] top-7 h-full w-px bg-border" />
-                    )}
-                    {/* Timeline dot */}
-                    <div className="absolute left-0 top-1.5 flex size-6 items-center justify-center rounded-full border border-border bg-card">
-                      <Briefcase className="size-3 text-muted-foreground" />
-                    </div>
-                    
-                    <div className="flex flex-col gap-1">
-                      <h3 className="font-semibold text-foreground">{exp.title}</h3>
-                      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
-                        <span className="font-medium text-indigo-600">
-                          {exp.organization}
-                        </span>
-                        <span>•</span>
-                        <span>{exp.duration}</span>
-                      </div>
-                      <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                        {exp.description}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </CardContent>
-            </Card>
-
-            {/* Interests */}
             {profile.interests.length > 0 && (
               <Card>
                 <CardHeader>
@@ -173,6 +116,15 @@ export default async function ProfilePage() {
               </Card>
             )}
 
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">Experience</CardTitle>
+              </CardHeader>
+              <CardContent className="text-sm text-muted-foreground">
+                <p>Experience section is not yet implemented.</p>
+                <p className="mt-2">Add your work history and projects in a future update.</p>
+              </CardContent>
+            </Card>
 
           </div>
         </div>

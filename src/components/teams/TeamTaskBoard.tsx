@@ -9,6 +9,7 @@ import {
   updateTeamTask,
   type TeamTask,
   type TaskStatus,
+  type TaskActionResult,
 } from "@/app/actions/tasks";
 
 const columns: {
@@ -42,20 +43,19 @@ export default function TeamTaskBoard({
     }
 
     startTransition(async () => {
-      try {
-        const result = await createTeamTask({
-          teamId,
-          title: trimmedTitle,
-        });
+      const result: TaskActionResult<TeamTask> = await createTeamTask({
+        teamId,
+        title: trimmedTitle,
+      });
 
-        setTasks((current) => [result.task, ...current]);
-        setTitle("");
-        toast.success("Task created.");
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to create task."
-        );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
+
+      setTasks((current) => [result.data, ...current]);
+      setTitle("");
+      toast.success("Task created.");
     });
   };
 
@@ -65,44 +65,42 @@ export default function TeamTaskBoard({
     }
 
     startTransition(async () => {
-      try {
-        const result = await updateTeamTask({
-          taskId: task.id,
-          teamId,
-          status,
-        });
+      const result: TaskActionResult<TeamTask> = await updateTeamTask({
+        taskId: task.id,
+        teamId,
+        status,
+      });
 
-        setTasks((current) =>
-          current.map((item) =>
-            item.id === task.id ? result.task : item
-          )
-        );
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to update task."
-        );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
+
+      setTasks((current) =>
+        current.map((item) =>
+          item.id === task.id ? result.data : item
+        )
+      );
     });
   };
 
   const removeTask = (task: TeamTask) => {
     startTransition(async () => {
-      try {
-        await deleteTeamTask({
-          taskId: task.id,
-          teamId,
-        });
+      const result: TaskActionResult<void> = await deleteTeamTask({
+        taskId: task.id,
+        teamId,
+      });
 
-        setTasks((current) =>
-          current.filter((item) => item.id !== task.id)
-        );
-
-        toast.success("Task deleted.");
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to delete task."
-        );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
+
+      setTasks((current) =>
+        current.filter((item) => item.id !== task.id)
+      );
+
+      toast.success("Task deleted.");
     });
   };
 

@@ -18,7 +18,11 @@ export type TeamTask = {
   updated_at: string;
 };
 
-async function requireTeamMember(teamId: string) {
+export type TaskActionResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
+async function requireTeamMember(teamId: string): Promise<TaskActionResult<{ supabase: Awaited<ReturnType<typeof createClient>>; user: { id: string } }>> {
   const supabase = await createClient();
 
   const {
@@ -26,7 +30,7 @@ async function requireTeamMember(teamId: string) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Error("Authentication required.");
+    return { success: false, error: "Authentication required." };
   }
 
   const { data: membership, error } = await supabase
@@ -37,14 +41,20 @@ async function requireTeamMember(teamId: string) {
     .maybeSingle();
 
   if (error || !membership) {
-    throw new Error("You are not a member of this team.");
+    return { success: false, error: "You are not a member of this team." };
   }
 
-  return { supabase, user };
+  return { success: true, data: { supabase, user } };
 }
 
-export async function getTeamTasks(teamId: string): Promise<TeamTask[]> {
-  const { supabase } = await requireTeamMember(teamId);
+export async function getTeamTasks(teamId: string): Promise<TaskActionResult<TeamTask[]>> {
+  const membershipResult = await requireTeamMember(teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase } = membershipResult.data;
 
   const { data, error } = await supabase
     .from("team_tasks")
@@ -55,10 +65,10 @@ export async function getTeamTasks(teamId: string): Promise<TeamTask[]> {
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error("Failed to load team tasks.");
+    return { success: false, error: "Failed to load team tasks." };
   }
 
-  return (data ?? []) as TeamTask[];
+  return { success: true, data: (data ?? []) as TeamTask[] };
 }
 
 export async function createTeamTask(input: {
@@ -68,21 +78,27 @@ export async function createTeamTask(input: {
   status?: TaskStatus;
   assignedRoleId?: string | null;
   assignedMemberId?: string | null;
-}) {
-  const { supabase, user } = await requireTeamMember(input.teamId);
+}): Promise<TaskActionResult<TeamTask>> {
+  const membershipResult = await requireTeamMember(input.teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase, user } = membershipResult.data;
 
   const title = input.title.trim();
 
   if (!title) {
-    throw new Error("Task title is required.");
+    return { success: false, error: "Task title is required." };
   }
 
   if (title.length > 120) {
-    throw new Error("Task title must be 120 characters or fewer.");
+    return { success: false, error: "Task title must be 120 characters or fewer." };
   }
 
   if (input.description && input.description.length > 1000) {
-    throw new Error("Task description must be 1000 characters or fewer.");
+    return { success: false, error: "Task description must be 1000 characters or fewer." };
   }
 
   const { data, error } = await supabase
@@ -102,15 +118,12 @@ export async function createTeamTask(input: {
     .single();
 
   if (error) {
-    throw new Error("Failed to create task.");
+    return { success: false, error: "Failed to create task." };
   }
 
   revalidatePath(`/teams/${input.teamId}/workspace`);
 
-  return {
-    success: true,
-    task: data as TeamTask,
-  };
+  return { success: true, data: data as TeamTask };
 }
 
 export async function updateTeamTask(input: {
@@ -121,8 +134,14 @@ export async function updateTeamTask(input: {
   status?: TaskStatus;
   assignedRoleId?: string | null;
   assignedMemberId?: string | null;
-}) {
-  const { supabase } = await requireTeamMember(input.teamId);
+}): Promise<TaskActionResult<TeamTask>> {
+  const membershipResult = await requireTeamMember(input.teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase } = membershipResult.data;
 
   const updates: Record<string, unknown> = {
     updated_at: new Date().toISOString(),
@@ -132,11 +151,11 @@ export async function updateTeamTask(input: {
     const title = input.title.trim();
 
     if (!title) {
-      throw new Error("Task title is required.");
+      return { success: false, error: "Task title is required." };
     }
 
     if (title.length > 120) {
-      throw new Error("Task title must be 120 characters or fewer.");
+      return { success: false, error: "Task title must be 120 characters or fewer." };
     }
 
     updates.title = title;
@@ -144,7 +163,7 @@ export async function updateTeamTask(input: {
 
   if (input.description !== undefined) {
     if (input.description.length > 1000) {
-      throw new Error("Task description must be 1000 characters or fewer.");
+      return { success: false, error: "Task description must be 1000 characters or fewer." };
     }
 
     updates.description = input.description.trim() || null;
@@ -173,22 +192,25 @@ export async function updateTeamTask(input: {
     .single();
 
   if (error) {
-    throw new Error("Failed to update task.");
+    return { success: false, error: "Failed to update task." };
   }
 
   revalidatePath(`/teams/${input.teamId}/workspace`);
 
-  return {
-    success: true,
-    task: data as TeamTask,
-  };
+  return { success: true, data: data as TeamTask };
 }
 
 export async function deleteTeamTask(input: {
   taskId: string;
   teamId: string;
-}) {
-  const { supabase } = await requireTeamMember(input.teamId);
+}): Promise<TaskActionResult<void>> {
+  const membershipResult = await requireTeamMember(input.teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase } = membershipResult.data;
 
   const { error } = await supabase
     .from("team_tasks")
@@ -197,12 +219,10 @@ export async function deleteTeamTask(input: {
     .eq("team_id", input.teamId);
 
   if (error) {
-    throw new Error("Failed to delete task.");
+    return { success: false, error: "Failed to delete task." };
   }
 
   revalidatePath(`/teams/${input.teamId}/workspace`);
 
-  return {
-    success: true,
-  };
+  return { success: true, data: undefined };
 }

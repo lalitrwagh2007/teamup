@@ -158,7 +158,7 @@ export async function createInvitation(input: {
 
   const { data: team, error: teamError } = await supabase
     .from("teams")
-    .select("id, owner_id")
+    .select("id, leader_id")
     .eq("id", input.teamId)
     .single();
 
@@ -169,7 +169,7 @@ export async function createInvitation(input: {
     };
   }
 
-  if (team.owner_id !== user.id) {
+  if (team.leader_id !== user.id) {
     return {
       success: false,
       error: "Only the team owner can send invitations.",

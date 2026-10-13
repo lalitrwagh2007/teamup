@@ -17,6 +17,7 @@ import {
   deleteTeamResource,
   type ResourceType,
   type TeamResource,
+  type ResourceActionResult,
 } from "@/app/actions/resources";
 
 const resourceTypes: ResourceType[] = [
@@ -69,47 +70,43 @@ export default function TeamResources({
     }
 
     startTransition(async () => {
-      try {
-        const result = await createTeamResource({
-          teamId,
-          title,
-          url,
-          type,
-        });
+      const result: ResourceActionResult<TeamResource> = await createTeamResource({
+        teamId,
+        title,
+        url,
+        type,
+      });
 
-        setResources((current) => [result.resource, ...current]);
-        setTitle("");
-        setUrl("");
-        setType("GitHub");
-        toast.success("Resource added.");
-      } catch (error) {
-        toast.error(
-          error instanceof Error ? error.message : "Failed to add resource."
-        );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
+
+      setResources((current) => [result.data, ...current]);
+      setTitle("");
+      setUrl("");
+      setType("GitHub");
+      toast.success("Resource added.");
     });
   };
 
   const removeResource = (resource: TeamResource) => {
     startTransition(async () => {
-      try {
-        await deleteTeamResource({
-          resourceId: resource.id,
-          teamId,
-        });
+      const result: ResourceActionResult<void> = await deleteTeamResource({
+        resourceId: resource.id,
+        teamId,
+      });
 
-        setResources((current) =>
-          current.filter((item) => item.id !== resource.id)
-        );
-
-        toast.success("Resource deleted.");
-      } catch (error) {
-        toast.error(
-          error instanceof Error
-            ? error.message
-            : "Failed to delete resource."
-        );
+      if (!result.success) {
+        toast.error(result.error);
+        return;
       }
+
+      setResources((current) =>
+        current.filter((item) => item.id !== resource.id)
+      );
+
+      toast.success("Resource deleted.");
     });
   };
 

@@ -16,6 +16,10 @@ export type TeamResource = {
   created_at: string;
 };
 
+export type ResourceActionResult<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
+
 const resourceSchema = z.object({
   teamId: z.string().uuid(),
   title: z.string().trim().min(1).max(120),
@@ -23,7 +27,7 @@ const resourceSchema = z.object({
   type: z.enum(["GitHub", "Figma", "Google Docs", "Other"]),
 });
 
-async function requireTeamMember(teamId: string) {
+async function requireTeamMember(teamId: string): Promise<ResourceActionResult<{ supabase: Awaited<ReturnType<typeof createClient>>; user: { id: string } }>> {
   const supabase = await createClient();
 
   const {
@@ -31,7 +35,7 @@ async function requireTeamMember(teamId: string) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    throw new Error("Authentication required.");
+    return { success: false, error: "Authentication required." };
   }
 
   const { data: membership, error } = await supabase
@@ -42,16 +46,22 @@ async function requireTeamMember(teamId: string) {
     .maybeSingle();
 
   if (error || !membership) {
-    throw new Error("You are not a member of this team.");
+    return { success: false, error: "You are not a member of this team." };
   }
 
-  return { supabase, user };
+  return { success: true, data: { supabase, user } };
 }
 
 export async function getTeamResources(
   teamId: string
-): Promise<TeamResource[]> {
-  const { supabase } = await requireTeamMember(teamId);
+): Promise<ResourceActionResult<TeamResource[]>> {
+  const membershipResult = await requireTeamMember(teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase } = membershipResult.data;
 
   const { data, error } = await supabase
     .from("team_resources")
@@ -60,10 +70,10 @@ export async function getTeamResources(
     .order("created_at", { ascending: false });
 
   if (error) {
-    throw new Error("Failed to load team resources.");
+    return { success: false, error: "Failed to load team resources." };
   }
 
-  return (data ?? []) as TeamResource[];
+  return { success: true, data: (data ?? []) as TeamResource[] };
 }
 
 export async function createTeamResource(input: {
@@ -71,14 +81,20 @@ export async function createTeamResource(input: {
   title: string;
   url: string;
   type: ResourceType;
-}) {
+}): Promise<ResourceActionResult<TeamResource>> {
   const parsed = resourceSchema.safeParse(input);
 
   if (!parsed.success) {
-    throw new Error("Please provide a valid title, URL, and resource type.");
+    return { success: false, error: "Please provide a valid title, URL, and resource type." };
   }
 
-  const { supabase, user } = await requireTeamMember(parsed.data.teamId);
+  const membershipResult = await requireTeamMember(parsed.data.teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase, user } = membershipResult.data;
 
   const { data, error } = await supabase
     .from("team_resources")
@@ -93,21 +109,18 @@ export async function createTeamResource(input: {
     .single();
 
   if (error) {
-    throw new Error("Failed to create resource.");
+    return { success: false, error: "Failed to create resource." };
   }
 
   revalidatePath(`/teams/${parsed.data.teamId}/workspace`);
 
-  return {
-    success: true,
-    resource: data as TeamResource,
-  };
+  return { success: true, data: data as TeamResource };
 }
 
 export async function deleteTeamResource(input: {
   resourceId: string;
   teamId: string;
-}) {
+}): Promise<ResourceActionResult<void>> {
   const teamIdSchema = z.string().uuid();
   const resourceIdSchema = z.string().uuid();
 
@@ -115,10 +128,16 @@ export async function deleteTeamResource(input: {
     !teamIdSchema.safeParse(input.teamId).success ||
     !resourceIdSchema.safeParse(input.resourceId).success
   ) {
-    throw new Error("Invalid resource details.");
+    return { success: false, error: "Invalid resource details." };
   }
 
-  const { supabase } = await requireTeamMember(input.teamId);
+  const membershipResult = await requireTeamMember(input.teamId);
+
+  if (!membershipResult.success) {
+    return { success: false, error: membershipResult.error };
+  }
+
+  const { supabase } = membershipResult.data;
 
   const { error } = await supabase
     .from("team_resources")
@@ -127,12 +146,10 @@ export async function deleteTeamResource(input: {
     .eq("team_id", input.teamId);
 
   if (error) {
-    throw new Error("Failed to delete resource.");
+    return { success: false, error: "Failed to delete resource." };
   }
 
   revalidatePath(`/teams/${input.teamId}/workspace`);
 
-  return {
-    success: true,
-  };
+  return { success: true, data: undefined };
 }

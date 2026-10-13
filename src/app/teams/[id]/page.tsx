@@ -8,7 +8,6 @@ import {
   isTeamOwner,
 } from "@/app/actions/team";
 
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -17,6 +16,7 @@ import TeamCapacity from "@/components/teams/TeamCapacity";
 import CopyInviteLink from "@/components/teams/CopyInviteLink";
 import TeamOwnerActions from "@/components/teams/TeamOwnerActions";
 import MatchBreakdownDialog from "@/components/teams/MatchBreakdownDialog";
+import ApplyToTeamTrigger from "@/components/teams/ApplyToTeamTrigger";
 
 import type { ProficiencyLevel } from "@/types/database";
 import type { TeamRoleDetail } from "@/types/team";
@@ -88,6 +88,8 @@ export default async function TeamPage({ params }: TeamPageProps) {
       ),
     ),
   ];
+
+  const openRoles = team.roles.filter((role) => role.status === "open");
 
   const supabase = await createClient();
   const { data: authData } = await supabase.auth.getUser();
@@ -169,7 +171,8 @@ export default async function TeamPage({ params }: TeamPageProps) {
   }
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
+    <>
+      <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6 lg:px-8">
       {/* Header */}
       <div className="mb-8">
         <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -370,7 +373,10 @@ export default async function TeamPage({ params }: TeamPageProps) {
 
             <CardContent className="space-y-3">
               {!canManageTeam && (
-                <Button className="w-full">Apply to Join</Button>
+                <ApplyToTeamTrigger
+                  teamId={team.id}
+                  openRoles={openRoles}
+                />
               )}
 
               {canManageTeam && (
@@ -385,5 +391,6 @@ export default async function TeamPage({ params }: TeamPageProps) {
         </aside>
       </div>
     </main>
+    </>
   );
 }

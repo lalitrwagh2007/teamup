@@ -724,7 +724,6 @@ export async function createTeam(
   }
 
   revalidatePath("/teams");
-  revalidatePath("/explore");
   revalidatePath("/dashboard");
 
   return {
@@ -837,6 +836,65 @@ export async function isTeamOwner(
   }
 
   return data.leader_id === user.id;
+}
+
+export async function getMyTeams(): Promise<
+  TeamActionResult<TeamRecord[]>
+> {
+  const { supabase, user } = await getAuthenticatedUser();
+
+  if (!user) {
+    return {
+      success: false,
+      data: null,
+      error: "You must be signed in to view your teams.",
+    };
+  }
+
+  const { data, error } = await supabase
+    .from("teams")
+    .select(`
+      *,
+      team_members!inner(count)
+    `)
+    .eq("leader_id", user.id)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return {
+      success: false,
+      data: null,
+      error: error.message,
+    };
+  }
+
+  interface TeamWithMemberCount {
+  id: string;
+  leader_id: string | null;
+  name: string;
+  description: string | null;
+  track: string;
+  category: string | null;
+  avatar_url: string | null;
+  mode: string | null;
+  location: string | null;
+  max_members: number;
+  status: string;
+  created_at: string;
+  updated_at: string;
+  team_members: { count: number }[] | null;
+}
+
+  const teamsWithCount = (data ?? []).map((team: TeamWithMemberCount) => ({
+    ...mapTeam(team as TeamRow),
+    currentMembers: team.team_members?.[0]?.count ?? 1,
+  }));
+
+  return {
+    success: true,
+    data: teamsWithCount,
+    error: null,
+  };
 }
 
 export async function getTeamDetails(
@@ -1407,7 +1465,7 @@ export async function createTeamRole(
   revalidatePath(
     `/teams/${teamId}`,
   );
-  revalidatePath("/explore");
+  revalidatePath("/teams");
   revalidatePath("/dashboard");
 
   return {
@@ -1711,7 +1769,7 @@ export async function updateTeamRoles(
   revalidatePath(
     `/teams/${teamId}`,
   );
-  revalidatePath("/explore");
+  revalidatePath("/teams");
   revalidatePath("/dashboard");
 
   return {
@@ -1892,7 +1950,6 @@ export async function updateTeam(
   }
 
   revalidatePath("/teams");
-  revalidatePath("/explore");
   revalidatePath(
     `/teams/${teamId}`,
   );
@@ -1989,7 +2046,6 @@ export async function deleteTeam(
   }
 
   revalidatePath("/teams");
-  revalidatePath("/explore");
   revalidatePath("/dashboard");
 
   return {
