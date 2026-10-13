@@ -1,9 +1,7 @@
 "use client";
 
-import { useActionState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { useActionState } from "react";
 import Link from "next/link";
-import { toast } from "sonner";
 import { Users, Loader2, ArrowRight } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -16,17 +14,7 @@ const initialState: SignupState = {
 };
 
 export default function SignupPage() {
-  const router = useRouter();
   const [state, formAction, isPending] = useActionState(signUpAction, initialState);
-
-  useEffect(() => {
-    if (state.success) {
-      toast.success(state.message || "Account created successfully!");
-      router.push("/onboarding");
-    } else if (state.message) {
-      toast.error(state.message);
-    }
-  }, [state, router]);
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center bg-muted/40 p-4 sm:p-6 lg:p-8">
@@ -88,6 +76,12 @@ export default function SignupPage() {
                   </>
                 )}
               </Button>
+
+              {!state.success && state.message && (
+                <p className="text-sm text-center text-destructive" role="alert">
+                  {state.message}
+                </p>
+              )}
             </form>
           </CardContent>
 

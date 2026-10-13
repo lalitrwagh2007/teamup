@@ -764,6 +764,89 @@ export async function getTeams(): Promise<
   };
 }
 
+export async function getTeamsForListing(): Promise<
+  TeamActionResult<TeamRecord[]>
+> {
+  const supabase =
+    await createClient();
+
+  const { data, error } =
+    await supabase
+      .from("teams")
+      .select(
+        `
+        *,
+        team_members!inner(count),
+        team_roles (
+          id,
+          title,
+          description,
+          status,
+          spots_total,
+          spots_filled,
+          team_role_skills (
+            skill_id,
+            skills (
+              id,
+              name
+            )
+          )
+        )
+        `
+      )
+      .eq("status", "recruiting")
+      .order("created_at", { ascending: false });
+
+  if (error) {
+    console.error("getTeamsForListing error:", error);
+    return {
+      success: false,
+      data: null,
+      error: error.message,
+    };
+  }
+
+  interface TeamWithDetails {
+    id: string;
+    leader_id: string | null;
+    name: string;
+    description: string | null;
+    track: string;
+    category: string | null;
+    avatar_url: string | null;
+    mode: string | null;
+    location: string | null;
+    max_members: number;
+    status: string;
+    created_at: string;
+    updated_at: string;
+    team_members: { count: number }[] | null;
+    team_roles: {
+      id: string;
+      title: string;
+      description: string | null;
+      status: string;
+      spots_total: number;
+      spots_filled: number;
+      team_role_skills: {
+        skill_id: string;
+        skills: { id: string; name: string } | null;
+      }[];
+    }[];
+  }
+
+  const teamsWithDetails = (data ?? []).map((team: TeamWithDetails) => ({
+    ...mapTeam(team as TeamRow),
+    currentMembers: team.team_members?.[0]?.count ?? 1,
+  }));
+
+  return {
+    success: true,
+    data: teamsWithDetails as TeamRecord[],
+    error: null,
+  };
+}
+
 export async function getTeamById(
   teamId: string,
 ): Promise<
