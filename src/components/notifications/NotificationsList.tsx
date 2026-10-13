@@ -65,10 +65,6 @@ export default function NotificationsList({
   const [isPending, startTransition] = useTransition();
 
   useEffect(() => {
-    setNotifications(initialNotifications);
-  }, [initialNotifications]);
-
-  useEffect(() => {
     const handleNotificationInserted = (event: Event) => {
       const customEvent = event as CustomEvent<Notification>;
 

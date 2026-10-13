@@ -11,7 +11,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import type { MatchBreakdown } from "@/lib/matching/calculateMatch";
-import { Button } from "@/components/ui/button";
 
 interface MatchBreakdownDialogProps {
   overallScore: number;
