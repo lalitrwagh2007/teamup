@@ -8,6 +8,14 @@ export type TeamStatus =
 
 export type WorkMode = "Remote" | "Hybrid" | "On-site";
 
+export interface TeamRoleInput {
+  id?: string;
+  title: string;
+  description?: string | null;
+  spotsTotal: number;
+  skillIds: string[];
+}
+
 export interface TeamRecord {
   id: string;
   leaderId: string | null;
@@ -33,6 +41,7 @@ export interface CreateTeamInput {
   mode?: WorkMode | null;
   location?: string | null;
   maxMembers?: number;
+  roles?: TeamRoleInput[];
 }
 
 export interface UpdateTeamInput {
@@ -45,6 +54,7 @@ export interface UpdateTeamInput {
   location?: string | null;
   maxMembers?: number;
   status?: TeamStatus;
+  roles?: TeamRoleInput[];
 }
 
 export type TeamActionResult<T> =

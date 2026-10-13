@@ -3,7 +3,7 @@
 import { FormEvent, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 
-import { deleteTeam, updateTeam } from "@/app/actions/team";
+import { deleteTeam, updateTeam, updateTeamRoles } from "@/app/actions/team";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,13 +17,24 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import type { TeamDetails, TeamTrack } from "@/types/team";
+import TeamRoleFields from "@/components/teams/TeamRoleFields";
+
+import type {
+  AvailableRoleSkill,
+  TeamDetails,
+  TeamRoleInput,
+  TeamTrack,
+} from "@/types/team";
 
 interface TeamOwnerActionsProps {
   team: TeamDetails;
+  availableSkills: AvailableRoleSkill[];
 }
 
-export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
+export default function TeamOwnerActions({
+  team,
+  availableSkills,
+}: TeamOwnerActionsProps) {
   const router = useRouter();
 
   const [isPending, startTransition] = useTransition();
@@ -42,6 +53,16 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
 
   const [maxMembers, setMaxMembers] = useState(String(team.maxMembers));
 
+  const [roles, setRoles] = useState<TeamRoleInput[]>(
+    team.roles.map((role) => ({
+      id: role.id,
+      title: role.title,
+      description: role.description,
+      spotsTotal: role.spotsTotal,
+      skillIds: role.requiredSkills.map((skill) => skill.id),
+    })),
+  );
+
   const [error, setError] = useState<string | null>(null);
 
   function handleUpdate(event: FormEvent<HTMLFormElement>) {
@@ -56,11 +77,6 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
       return;
     }
 
-    if (track !== "technical" && track !== "community") {
-      setError("Invalid team track.");
-      return;
-    }
-
     if (
       !Number.isInteger(parsedMaxMembers) ||
       parsedMaxMembers < 1 ||
@@ -70,8 +86,15 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
       return;
     }
 
+    for (const role of roles) {
+      if (!role.title.trim()) {
+        setError("Every role needs a title.");
+        return;
+      }
+    }
+
     startTransition(async () => {
-      const result = await updateTeam(team.id, {
+      const teamResult = await updateTeam(team.id, {
         name: name.trim(),
         description: description.trim() || null,
         track,
@@ -80,13 +103,19 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
         maxMembers: parsedMaxMembers,
       });
 
-      if (!result.success) {
-        setError(result.error);
+      if (!teamResult.success) {
+        setError(teamResult.error);
+        return;
+      }
+
+      const rolesResult = await updateTeamRoles(team.id, roles);
+
+      if (!rolesResult.success) {
+        setError(rolesResult.error);
         return;
       }
 
       setIsEditing(false);
-
       router.refresh();
     });
   }
@@ -153,13 +182,13 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
   return (
     <form
       onSubmit={handleUpdate}
-      className="space-y-5 rounded-xl border bg-card p-5"
+      className="space-y-6 rounded-xl border bg-card p-5"
     >
       <div>
         <h2 className="text-lg font-semibold">Edit Team</h2>
 
         <p className="mt-1 text-sm text-muted-foreground">
-          Update your team information.
+          Update team information and required roles.
         </p>
       </div>
 
@@ -263,10 +292,17 @@ export default function TeamOwnerActions({ team }: TeamOwnerActionsProps) {
             value={maxMembers}
             onChange={(event) => setMaxMembers(event.target.value)}
             disabled={isPending}
-            required
           />
         </div>
       </div>
+
+      <TeamRoleFields
+        roles={roles}
+        onChange={setRoles}
+        availableSkills={availableSkills}
+        teamTrack={track}
+        disabled={isPending}
+      />
 
       {error && (
         <div
