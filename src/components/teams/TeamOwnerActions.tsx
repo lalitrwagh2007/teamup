@@ -139,7 +139,7 @@ export default function TeamOwnerActions({
         return;
       }
 
-      router.push("/explore");
+      router.push("/teams");
       router.refresh();
     });
   }

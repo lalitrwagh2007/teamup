@@ -60,7 +60,7 @@ export async function updateSession(request: NextRequest) {
 
   // ── Protected routes ──────────────────────────────────────────────
   // Only these route prefixes require an authenticated session.
-  // Everything else (/, /login, /signup, /forgot-password, /explore,
+  // Everything else (/, /login, /signup, /forgot-password, /teams,
   // /teams, /teams/[id], /auth/callback, /onboarding, etc.) is public.
   const protectedPrefixes = [
     "/dashboard",

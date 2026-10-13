@@ -3,6 +3,7 @@ import { getTeamTasks } from "@/app/actions/tasks";
 import { getTeamResources } from "@/app/actions/resources";
 import TeamTaskBoard from "@/components/teams/TeamTaskBoard";
 import TeamResources from "@/components/teams/TeamResources";
+import TeamMemberContacts from "@/components/teams/TeamMemberContacts";
 import { createClient } from "@/lib/supabase/server";
 
 interface WorkspacePageProps {
@@ -46,10 +47,45 @@ export default async function TeamWorkspacePage({
     redirect("/teams");
   }
 
-  const [tasks, resources] = await Promise.all([
+  const { data: membersData, error: membersError } = await supabase
+    .from("team_members")
+    .select(
+      `
+        id,
+        user_id,
+        member_role,
+        joined_at,
+        profiles:user_id (
+          id,
+          full_name,
+          avatar_url,
+          github,
+          linkedin,
+          portfolio
+        )
+      `
+    )
+    .eq("team_id", teamId);
+
+  if (membersError) {
+    console.error(membersError);
+  }
+
+  const members = (membersData ?? []).map((m) => ({
+    id: m.id,
+    userId: m.user_id,
+    memberRole: m.member_role,
+    joinedAt: m.joined_at,
+    profile: m.profiles?.[0] ?? null,
+  }));
+
+  const [tasksResult, resourcesResult] = await Promise.all([
     getTeamTasks(teamId),
     getTeamResources(teamId),
   ]);
+
+  const tasks = tasksResult.success ? tasksResult.data : [];
+  const resources = resourcesResult.success ? resourcesResult.data : [];
 
   return (
     <main className="min-h-screen bg-background">
@@ -112,6 +148,8 @@ export default async function TeamWorkspacePage({
           teamId={teamId}
           initialResources={resources}
         />
+
+        <TeamMemberContacts members={members} />
       </div>
     </main>
   );

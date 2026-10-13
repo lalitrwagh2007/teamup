@@ -23,6 +23,14 @@ export interface Application {
   status: ApplicationStatus;
   created_at: string;
   updated_at: string;
+  team?: {
+    id: string;
+    name: string;
+  };
+  role?: {
+    id: string;
+    title: string;
+  };
 }
 
 export interface ApplicationActionResult<T = null> {
@@ -87,7 +95,7 @@ export async function applyToTeam(
 
     const { data: team, error: teamError } = await supabase
       .from("teams")
-      .select("id, owner_id")
+      .select("id, leader_id")
       .eq("id", teamId)
       .maybeSingle();
 
@@ -98,7 +106,7 @@ export async function applyToTeam(
       };
     }
 
-    if (team.owner_id === user.id) {
+    if (team.leader_id === user.id) {
       return {
         success: false,
         error: "Team owners cannot apply to their own team.",
@@ -204,7 +212,18 @@ export async function getMyApplications(): Promise<
     const { data, error } = await supabase
       .from("applications")
       .select(
-        "id, applicant_id, team_id, role_id, message, status, created_at, updated_at",
+        `
+        id,
+        applicant_id,
+        team_id,
+        role_id,
+        message,
+        status,
+        created_at,
+        updated_at,
+        teams!inner(id, name),
+        team_roles!inner(id, title)
+        `
       )
       .eq("applicant_id", user.id)
       .order("created_at", { ascending: false });
@@ -218,9 +237,28 @@ export async function getMyApplications(): Promise<
       };
     }
 
+    interface JoinedApplication {
+  id: string;
+  applicant_id: string;
+  team_id: string;
+  role_id: string;
+  message: string | null;
+  status: ApplicationStatus;
+  created_at: string;
+  updated_at: string;
+  teams: { id: string; name: string }[] | null;
+  team_roles: { id: string; title: string }[] | null;
+}
+
+    const applications = (data ?? []).map((app: JoinedApplication) => ({
+      ...app,
+      team: app.teams?.[0] ? { id: app.teams[0].id, name: app.teams[0].name } : undefined,
+      role: app.team_roles?.[0] ? { id: app.team_roles[0].id, title: app.team_roles[0].title } : undefined,
+    }));
+
     return {
       success: true,
-      data: (data ?? []) as Application[],
+      data: applications as Application[],
     };
   } catch (error) {
     console.error("getMyApplications error:", error);
@@ -254,7 +292,7 @@ export async function getTeamApplications(
 
     const { data: team, error: teamError } = await supabase
       .from("teams")
-      .select("id, owner_id")
+      .select("id, leader_id")
       .eq("id", teamId)
       .maybeSingle();
 
@@ -265,7 +303,7 @@ export async function getTeamApplications(
       };
     }
 
-    if (team.owner_id !== user.id) {
+    if (team.leader_id !== user.id) {
       return {
         success: false,
         error: "Only the team owner can view applications.",
@@ -347,7 +385,7 @@ export async function acceptApplication(
 
     const { data: team, error: teamError } = await supabase
       .from("teams")
-      .select("id, owner_id, max_members")
+      .select("id, leader_id, max_members")
       .eq("id", application.team_id)
       .maybeSingle();
 
@@ -358,7 +396,7 @@ export async function acceptApplication(
       };
     }
 
-    if (team.owner_id !== user.id) {
+    if (team.leader_id !== user.id) {
       return {
         success: false,
         error: "Only the team owner can accept applications.",
@@ -512,7 +550,7 @@ export async function rejectApplication(
 
     const { data: team, error: teamError } = await supabase
       .from("teams")
-      .select("id, owner_id")
+      .select("id, leader_id")
       .eq("id", application.team_id)
       .maybeSingle();
 
@@ -523,7 +561,7 @@ export async function rejectApplication(
       };
     }
 
-    if (team.owner_id !== user.id) {
+    if (team.leader_id !== user.id) {
       return {
         success: false,
         error: "Only the team owner can reject applications.",
