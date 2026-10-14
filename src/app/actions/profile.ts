@@ -203,7 +203,13 @@ function toUserProfile(
     github: string | null;
     linkedin: string | null;
     portfolio: string | null;
+    team_status: "finding_team" | "already_have_team" | null;
   },
+  contact: {
+    phone_number: string | null;
+    phone_verified: boolean | null;
+    share_phone_with_team: boolean | null;
+  } | null,
   skills: (string | UserSkillItem)[],
   interests: string[],
   userSkills?: UserSkillItem[],
@@ -220,6 +226,12 @@ function toUserProfile(
     github: row.github ?? "",
     linkedin: row.linkedin ?? "",
     portfolio: row.portfolio ?? "",
+
+    phoneNumber: contact?.phone_number ?? null,
+    phoneVerified: contact?.phone_verified ?? false,
+    sharePhoneWithTeam: contact?.share_phone_with_team ?? false,
+
+    teamStatus: row.team_status ?? null,
     skills,
     userSkills,
     interests,
@@ -309,7 +321,19 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
         message: "Profile not found.",
       };
     }
+    // 3. Fetch the user's private contact information
+    const { data: contact, error: contactError } = await supabase
+      .from("profile_contacts")
+      .select("phone_number, phone_verified, share_phone_with_team")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
+    if (contactError) {
+      console.error(
+        "Failed to load private contact information:",
+        contactError,
+      );
+    }
     // 3. Fetch the user's skills
     const { data: userSkillsRaw } = await supabase
       .from("user_skills")
@@ -366,6 +390,7 @@ export async function getCurrentProfile(): Promise<ProfileResult> {
       success: true,
       profile: toUserProfile(
         profile,
+        contact ?? null,
         detailedSkills,
         interests,
         detailedSkills,
@@ -428,6 +453,13 @@ export async function updateProfile(
       github: (formData.get("github") as string) || undefined,
       linkedin: (formData.get("linkedin") as string) || undefined,
       portfolio: (formData.get("portfolio") as string) || undefined,
+
+      teamStatus:
+        (formData.get("teamStatus") as
+          | "finding_team"
+          | "already_have_team"
+          | null) || null,
+
       skills: [],
       interests: [],
     };
@@ -456,6 +488,7 @@ export async function updateProfile(
       github,
       linkedin,
       portfolio,
+      teamStatus,
     } = validation.data;
 
     // 3. Update only the authenticated user's profile row
@@ -471,6 +504,7 @@ export async function updateProfile(
         github: github || null,
         linkedin: linkedin || null,
         portfolio: portfolio || null,
+        team_status: teamStatus ?? null,
         updated_at: new Date().toISOString(),
       })
       .eq("id", user.id);

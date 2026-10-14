@@ -10,6 +10,20 @@ const optionalUrl = z
   .optional()
   .transform((v) => v || "");
 
+// ─── Phone number validation (E.164 format) ──────────────────────────────────
+
+const phoneNumberSchema = z
+  .string()
+  .trim()
+  .regex(/^\+[1-9]\d{1,14}$/, { message: "Please enter a valid phone number in E.164 format (e.g., +919876543210)." })
+  .optional()
+  .or(z.literal(""))
+  .transform((v) => v || "");
+
+// ─── Team status enum ────────────────────────────────────────────────────────
+
+const teamStatusEnum = z.enum(["finding_team", "already_have_team"]);
+
 // ─── Profile update schema ──────────────────────────────────────────────────
 
 export const updateProfileSchema = z.object({
@@ -61,6 +75,11 @@ export const updateProfileSchema = z.object({
   github: optionalUrl,
   linkedin: optionalUrl,
   portfolio: optionalUrl,
+
+  phoneNumber: phoneNumberSchema,
+  phoneVerified: z.boolean().optional().default(false),
+  sharePhoneWithTeam: z.boolean().optional().default(false),
+  teamStatus: teamStatusEnum.optional().nullable(),
 
   skills: z
     .array(z.string().trim().min(1))

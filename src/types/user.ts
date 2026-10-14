@@ -1,6 +1,6 @@
-import { ProficiencyLevel, WorkMode } from "./database";
+import { ProficiencyLevel, WorkMode, TeamPreference } from "./database";
 
-export type { ProficiencyLevel };
+export type { ProficiencyLevel, TeamPreference };
 
 export interface UserSkillItem {
   skillId: string;
@@ -25,6 +25,10 @@ export interface UserProfile {
   linkedin: string;
   portfolio: string;
   profileCompletion: number;
+  phoneNumber: string | null;
+  phoneVerified: boolean | null;
+  sharePhoneWithTeam: boolean | null;
+  teamStatus: TeamPreference | null;
 }
 
 export interface Skill {

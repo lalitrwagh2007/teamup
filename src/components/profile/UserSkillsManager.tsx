@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,7 @@ export default function UserSkillsManager({ initialUserSkills = [] }: UserSkills
   const [selectedSkillName, setSelectedSkillName] = useState("");
   const [selectedProficiency, setSelectedProficiency] = useState<ProficiencyLevel>("Intermediate");
   
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
   const [feedback, setFeedback] = useState<{ type: "success" | "error"; message: string } | null>(null);
 
   useEffect(() => {
@@ -46,52 +46,118 @@ export default function UserSkillsManager({ initialUserSkills = [] }: UserSkills
   }, [initialUserSkills]);
 
   // Handle Adding a Skill
-  const handleAddSkill = () => {
-    if (!selectedSkillName.trim()) {
-      setFeedback({ type: "error", message: "Please enter or select a skill name." });
-      return;
-    }
+ const handleAddSkill = async () => {
+   if (!selectedSkillName.trim()) {
+     setFeedback({
+       type: "error",
+       message: "Please enter or select a skill name.",
+     });
+     return;
+   }
 
-    setFeedback(null);
-    startTransition(async () => {
-      const res = await addUserSkill(selectedSkillName.trim(), selectedProficiency);
-      if (res.success && res.data) {
-        setUserSkills(res.data);
-        setSelectedSkillName("");
-        setFeedback({ type: "success", message: res.message || "Skill added successfully!" });
-      } else {
-        setFeedback({ type: "error", message: res.message || "Failed to add skill." });
-      }
-    });
-  };
+   setFeedback(null);
+   setIsPending(true);
+
+   try {
+     const res = await addUserSkill(
+       selectedSkillName.trim(),
+       selectedProficiency,
+     );
+
+     if (res.success && res.data) {
+       setUserSkills(res.data);
+       setSelectedSkillName("");
+
+       setFeedback({
+         type: "success",
+         message: res.message || "Skill added successfully!",
+       });
+     } else {
+       setFeedback({
+         type: "error",
+         message: res.message || "Failed to add skill.",
+       });
+     }
+   } catch (error) {
+     console.error("Add skill error:", error);
+
+     setFeedback({
+       type: "error",
+       message: "Failed to add skill.",
+     });
+   } finally {
+     setIsPending(false);
+   }
+ };
 
   // Handle Removing a Skill
-  const handleRemoveSkill = (skillId: string) => {
+  const handleRemoveSkill = async (skillId: string) => {
     setFeedback(null);
-    startTransition(async () => {
+    setIsPending(true);
+
+    try {
       const res = await removeUserSkill(skillId);
+
       if (res.success && res.data) {
         setUserSkills(res.data);
-        setFeedback({ type: "success", message: res.message || "Skill removed successfully." });
+
+        setFeedback({
+          type: "success",
+          message: res.message || "Skill removed successfully.",
+        });
       } else {
-        setFeedback({ type: "error", message: res.message || "Failed to remove skill." });
+        setFeedback({
+          type: "error",
+          message: res.message || "Failed to remove skill.",
+        });
       }
-    });
+    } catch (error) {
+      console.error("Remove skill error:", error);
+
+      setFeedback({
+        type: "error",
+        message: "Failed to remove skill.",
+      });
+    } finally {
+      setIsPending(false);
+    }
   };
 
   // Handle Updating Proficiency Level
-  const handleProficiencyChange = (skillId: string, newProficiency: ProficiencyLevel) => {
-    setFeedback(null);
-    startTransition(async () => {
-      const res = await updateSkillProficiency(skillId, newProficiency);
-      if (res.success && res.data) {
-        setUserSkills(res.data);
-        setFeedback({ type: "success", message: res.message || "Proficiency updated." });
-      } else {
-        setFeedback({ type: "error", message: res.message || "Failed to update proficiency." });
-      }
-    });
-  };
+ const handleProficiencyChange = async (
+   skillId: string,
+   newProficiency: ProficiencyLevel,
+ ) => {
+   setFeedback(null);
+   setIsPending(true);
+
+   try {
+     const res = await updateSkillProficiency(skillId, newProficiency);
+
+     if (res.success && res.data) {
+       setUserSkills(res.data);
+
+       setFeedback({
+         type: "success",
+         message: res.message || "Proficiency updated.",
+       });
+     } else {
+       setFeedback({
+         type: "error",
+         message: res.message || "Failed to update proficiency.",
+       });
+     }
+   } catch (error) {
+     console.error("Update proficiency error:", error);
+
+     setFeedback({
+       type: "error",
+       message: "Failed to update proficiency.",
+     });
+   } finally {
+     setIsPending(false);
+   }
+ };
 
   return (
     <Card className="border-2 border-zinc-900 shadow-sm">

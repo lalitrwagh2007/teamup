@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useEffect, useState } from "react";
+import type { FormEvent } from "react";
 import { Loader2, Plus, X } from "lucide-react";
 import { toast } from "sonner";
 
@@ -9,7 +10,9 @@ import {
   getUserInterests,
   removeUserInterest,
 } from "@/app/actions/interests";
+
 import type { Interest } from "@/types/user";
+
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -24,23 +27,33 @@ export default function UserInterestsManager() {
   const [interests, setInterests] = useState<Interest[]>([]);
   const [interestName, setInterestName] = useState("");
   const [isLoading, setIsLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [isPending, setIsPending] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
 
     const loadInterests = async () => {
-      const result = await getUserInterests();
+      try {
+        const result = await getUserInterests();
 
-      if (!isMounted) return;
+        if (!isMounted) return;
 
-      if (result.success) {
-        setInterests(result.data);
-      } else {
-        toast.error(result.message);
+        if (result.success) {
+          setInterests(result.data);
+        } else {
+          toast.error(result.message ?? "Failed to load interests.");
+        }
+      } catch (error) {
+        console.error("Load interests error:", error);
+
+        if (isMounted) {
+          toast.error("Failed to load interests.");
+        }
+      } finally {
+        if (isMounted) {
+          setIsLoading(false);
+        }
       }
-
-      setIsLoading(false);
     };
 
     loadInterests();
@@ -50,7 +63,7 @@ export default function UserInterestsManager() {
     };
   }, []);
 
-  const handleAddInterest = (event: React.FormEvent<HTMLFormElement>) => {
+  const handleAddInterest = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
     const trimmedName = interestName.trim();
@@ -60,38 +73,55 @@ export default function UserInterestsManager() {
       return;
     }
 
-    startTransition(async () => {
+    setIsPending(true);
+
+    try {
       const result = await addUserInterest(trimmedName);
 
       if (!result.success) {
-        toast.error(result.message);
+        toast.error(result.message ?? "Failed to add interest.");
         return;
       }
 
       setInterests(result.data);
       setInterestName("");
+
       toast.success(result.message ?? "Interest added successfully.");
-    });
+    } catch (error) {
+      console.error("Add interest error:", error);
+      toast.error("Failed to add interest.");
+    } finally {
+      setIsPending(false);
+    }
   };
 
-  const handleRemoveInterest = (interestId: string) => {
-    startTransition(async () => {
+  const handleRemoveInterest = async (interestId: string) => {
+    setIsPending(true);
+
+    try {
       const result = await removeUserInterest(interestId);
 
       if (!result.success) {
-        toast.error(result.message);
+        toast.error(result.message ?? "Failed to remove interest.");
         return;
       }
 
       setInterests(result.data);
+
       toast.success(result.message ?? "Interest removed successfully.");
-    });
+    } catch (error) {
+      console.error("Remove interest error:", error);
+      toast.error("Failed to remove interest.");
+    } finally {
+      setIsPending(false);
+    }
   };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>Interests</CardTitle>
+
         <CardDescription>
           Add interests that help teams discover what you care about.
         </CardDescription>
