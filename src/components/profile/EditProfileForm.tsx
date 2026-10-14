@@ -3,19 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { ArrowLeft, Camera, Loader2, Save } from "lucide-react";
-import {
-  useActionState,
-  useEffect,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
 import Navbar from "@/components/layout/Navbar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+
 import {
   Select,
   SelectContent,
@@ -52,45 +47,67 @@ interface EditProfileFormProps {
 export default function EditProfileForm({ profile }: EditProfileFormProps) {
   const router = useRouter();
 
-  // ─── Profile save via server action ──────────────────────────────
+  // ─── Main profile save ─────────────────────────────────────
 
-  const [state, formAction, isSaving] = useActionState<
-    UpdateProfileState | null,
-    FormData
-  >(async (_prevState, formData) => {
-    const github = formData.get("githubUrl") as string;
-    const linkedin = formData.get("linkedinUrl") as string;
-    const portfolio = formData.get("portfolioUrl") as string;
+  const [state, setState] = useState<UpdateProfileState | null>(null);
 
-    formData.delete("githubUrl");
-    formData.delete("linkedinUrl");
-    formData.delete("portfolioUrl");
+  const [isSaving, setIsSaving] = useState(false);
 
-    formData.set("github", github ?? "");
-    formData.set("linkedin", linkedin ?? "");
-    formData.set("portfolio", portfolio ?? "");
+  const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
 
-    const result = await updateProfile(null, formData);
+    if (isSaving) return;
 
-    return result;
-  }, null);
+    setIsSaving(true);
+    setState(null);
 
-  // Handle success/error toasts
-  useEffect(() => {
-    if (!state) return;
+    try {
+      const formData = new FormData(event.currentTarget);
 
-    if (state.success) {
-      toast.success(state.message ?? "Profile updated!");
-      router.push("/profile");
-    } else if (state.message) {
-      toast.error(state.message);
+      const github = (formData.get("githubUrl") as string | null) ?? "";
+
+      const linkedin = (formData.get("linkedinUrl") as string | null) ?? "";
+
+      const portfolio = (formData.get("portfolioUrl") as string | null) ?? "";
+
+      formData.delete("githubUrl");
+      formData.delete("linkedinUrl");
+      formData.delete("portfolioUrl");
+
+      formData.set("github", github);
+      formData.set("linkedin", linkedin);
+      formData.set("portfolio", portfolio);
+
+      const result = await updateProfile(null, formData);
+
+      setState(result);
+
+      if (result.success) {
+        // Stop spinner before navigation.
+        setIsSaving(false);
+
+        toast.success(result.message ?? "Profile updated successfully!");
+
+        window.location.href = "/profile";
+        return;
+      }
+
+      toast.error(result.message ?? "Failed to update profile.");
+    } catch (error) {
+      console.error("Profile submit error:", error);
+
+      toast.error("Something went wrong while saving your profile.");
+    } finally {
+      setIsSaving(false);
     }
-  }, [state, router]);
+  };
 
-  // ─── Avatar upload ────────────────────────────────────────────────
+  // ─── Avatar upload ──────────────────────────────────────────
 
   const fileInputRef = useRef<HTMLInputElement>(null);
+
   const [isUploadingAvatar, startAvatarUpload] = useTransition();
+
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null);
 
   const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -102,30 +119,36 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
 
     if (!allowedTypes.includes(file.type)) {
       toast.error("Please upload a JPEG, PNG, WebP, or GIF image.");
+
       return;
     }
 
     if (file.size > 5 * 1024 * 1024) {
       toast.error("File size must be under 5 MB.");
+
       return;
     }
 
     const previewUrl = URL.createObjectURL(file);
+
     setAvatarPreview(previewUrl);
 
     startAvatarUpload(async () => {
       const formData = new FormData();
+
       formData.append("avatar", file);
 
       const result = await uploadAvatarAction(formData);
 
       if (result.success) {
         toast.success("Avatar updated!");
+
         setAvatarPreview(result.avatarUrl);
 
         window.location.reload();
       } else {
         toast.error(result.message);
+
         setAvatarPreview(null);
       }
     });
@@ -148,6 +171,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
 
       <main className="mx-auto w-full max-w-4xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
         {/* Header & Back link */}
+
         <div className="mb-6 flex flex-col gap-4">
           <Link
             href="/profile"
@@ -188,10 +212,11 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
 
         <form
           id="edit-profile-form"
-          action={formAction}
+          onSubmit={handleSubmit}
           className="flex flex-col gap-6"
         >
           {/* Avatar Section */}
+
           <Card>
             <CardHeader>
               <CardTitle>Profile Photo</CardTitle>
@@ -252,7 +277,8 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
             </CardContent>
           </Card>
 
-          {/* Basic Info Section */}
+          {/* Basic Information */}
+
           <Card>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
@@ -320,6 +346,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
           </Card>
 
           {/* Professional Details */}
+
           <Card>
             <CardHeader>
               <CardTitle>Professional Details</CardTitle>
@@ -333,6 +360,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
             <CardContent className="flex flex-col gap-5">
               <div className="grid gap-5 sm:grid-cols-2">
                 {/* Availability */}
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="availability" className="text-sm font-medium">
                     Availability
@@ -357,6 +385,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
                 </div>
 
                 {/* Work Mode */}
+
                 <div className="flex flex-col gap-2">
                   <label htmlFor="workMode" className="text-sm font-medium">
                     Work mode
@@ -381,6 +410,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
                 </div>
 
                 {/* Team Status */}
+
                 <div className="flex flex-col gap-2 sm:col-span-2">
                   <label htmlFor="teamStatus" className="text-sm font-medium">
                     Team Status
@@ -420,10 +450,12 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
             </CardContent>
           </Card>
 
-          {/* Real User Skills & Proficiency Manager */}
+          {/* Skills */}
+
           <UserSkillsManager />
 
           {/* Social Links */}
+
           <Card>
             <CardHeader>
               <CardTitle>Links & Portfolio</CardTitle>
@@ -479,6 +511,7 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
           </Card>
 
           {/* Mobile Submit Button */}
+
           <div className="flex justify-end pb-10 sm:hidden">
             <Button type="submit" disabled={isSaving} className="w-full gap-2">
               {isSaving ? (
@@ -491,8 +524,8 @@ export default function EditProfileForm({ profile }: EditProfileFormProps) {
           </div>
         </form>
 
-        {/* Interests have their own CRUD actions and must not be nested
-            inside the main profile form. */}
+        {/* Interests use their own actions */}
+
         <div className="mt-6">
           <UserInterestsManager />
         </div>

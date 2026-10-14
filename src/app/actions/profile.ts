@@ -438,11 +438,7 @@ export async function updateProfile(
       };
     }
 
-    // 2. Parse & validate profile fields
-    //
-    // Empty skills/interests arrays are supplied only because the
-    // existing validation schema expects those fields.
-    // They are NOT written to the database here.
+    // 2. Read submitted form values
     const rawData = {
       fullName: formData.get("fullName") as string,
       username: (formData.get("username") as string) || undefined,
@@ -460,10 +456,12 @@ export async function updateProfile(
           | "already_have_team"
           | null) || null,
 
+      // Skills/interests have separate CRUD managers.
       skills: [],
       interests: [],
     };
 
+    // 3. Validate
     const validation = updateProfileSchema.safeParse(rawData);
 
     if (!validation.success) {
@@ -491,8 +489,10 @@ export async function updateProfile(
       teamStatus,
     } = validation.data;
 
-    // 3. Update only the authenticated user's profile row
-    const { error: updateError } = await supabase
+    // 4. Update the authenticated user's row.
+    // select("id") lets us confirm that RLS actually allowed
+    // a row to be updated.
+    const { data: updatedProfile, error: updateError } = await supabase
       .from("profiles")
       .update({
         full_name: fullName,
@@ -507,9 +507,13 @@ export async function updateProfile(
         team_status: teamStatus ?? null,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", user.id);
+      .eq("id", user.id)
+      .select("id")
+      .maybeSingle();
 
     if (updateError) {
+      console.error("Profile update error:", updateError);
+
       if (
         updateError.code === "23505" &&
         updateError.message?.includes("username")
@@ -525,31 +529,34 @@ export async function updateProfile(
 
       return {
         success: false,
-        message: "Failed to update profile. Please try again.",
+        message:
+          updateError.message || "Failed to update profile. Please try again.",
       };
     }
 
-    // Skills and interests are intentionally NOT modified here.
+    if (!updatedProfile) {
+      console.error(
+        "Profile update returned no row. Check profiles UPDATE RLS policy.",
+      );
 
-    // 4. Re-fetch the full profile
-    const result = await getCurrentProfile();
-
-    if (!result.success) {
       return {
         success: false,
-        message: result.message,
+        message:
+          "Your profile could not be updated. Please check profile permissions.",
       };
     }
 
+    // Do NOT call getCurrentProfile() here.
+    // That extra request was unnecessary for this form action.
     revalidatePath("/profile");
-    revalidatePath("/profile/edit");
 
     return {
       success: true,
       message: "Profile updated successfully!",
-      profile: result.profile,
     };
-  } catch {
+  } catch (error) {
+    console.error("Unexpected updateProfile error:", error);
+
     return {
       success: false,
       message: "An unexpected error occurred. Please try again later.",
