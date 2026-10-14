@@ -2,7 +2,7 @@
 import NotificationBell from "@/components/notifications/NotificationBell";
 import { useEffect, useState, useTransition } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Menu, Users, Home, Briefcase, LogOut, User } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
@@ -28,17 +28,32 @@ import type { User as SupabaseUser } from "@supabase/supabase-js";
 // ─── Nav link definitions ─────────────────────────────────────────────────────
 
 const NAV_LINKS = [
-  { label: "Home", href: "/", icon: Home },
+  { label: "Home", href: "/dashboard", icon: Home },
   { label: "Explore Teams", href: "/teams", icon: Users },
-  { label: "Opportunities", href: "/opportunities", icon: Briefcase },
+  {
+    label: "Opportunities",
+    href: "/teams?view=opportunities",
+    icon: Briefcase,
+  },
 ] as const;
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isActive(href: string, pathname: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
-}
+function isActive(href: string, pathname: string, view?: string | null) {
+  if (href === "/dashboard") {
+    return pathname === "/dashboard";
+  }
 
+  if (href === "/teams") {
+    return pathname === "/teams" && view !== "opportunities";
+  }
+
+  if (href === "/teams?view=opportunities") {
+    return pathname === "/teams" && view === "opportunities";
+  }
+
+  return pathname.startsWith(href);
+}
 function getUserInitials(user: SupabaseUser): string {
   const fullName =
     user.user_metadata?.full_name ?? user.email ?? "";
@@ -120,6 +135,7 @@ function MobileNavLink({
 
 export default function Navbar() {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const [user, setUser] = useState<SupabaseUser | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -185,7 +201,7 @@ export default function Navbar() {
                 <NavLink
                   href={href}
                   label={label}
-                  active={isActive(href, pathname)}
+                  active={isActive(href, pathname, searchParams.get("view"))}
                 />
               </li>
             ))}

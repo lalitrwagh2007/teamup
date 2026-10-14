@@ -125,7 +125,7 @@ export default async function DashboardPage() {
       icon: CalendarDays,
       iconBg: "bg-emerald-50",
       iconColor: "text-emerald-600",
-      href: "/opportunities",
+      href: "/teams?view=opportunities",
     },
     {
       label: "Matches",

@@ -4,7 +4,6 @@ import Link from "next/link";
 
 const QUICK_LINKS = [
   { label: "Explore Teams", href: "/teams" },
-  { label: "Opportunities", href: "/opportunities" },
   { label: "About", href: "/about" },
   { label: "Contact", href: "/contact" },
 ];

@@ -764,38 +764,41 @@ export async function getTeams(): Promise<
   };
 }
 
-export async function getTeamsForListing(): Promise<
-  TeamActionResult<TeamRecord[]>
-> {
-  const supabase =
-    await createClient();
+export async function getTeamsForListing(
+  opportunitiesOnly = false,
+): Promise<TeamActionResult<TeamRecord[]>> {
+  const supabase = await createClient();
 
-  const { data, error } =
-    await supabase
-      .from("teams")
-      .select(
-        `
-        *,
-        team_members!inner(count),
-        team_roles (
-          id,
-          title,
-          description,
-          status,
-          spots_total,
-          spots_filled,
-          team_role_skills (
-            skill_id,
-            skills (
-              id,
-              name
-            )
+  let query = supabase
+    .from("teams")
+    .select(
+      `
+      *,
+      team_members!inner(count),
+      team_roles (
+        id,
+        title,
+        description,
+        status,
+        spots_total,
+        spots_filled,
+        team_role_skills (
+          skill_id,
+          skills (
+            id,
+            name
           )
         )
-        `
       )
-      .eq("status", "recruiting")
-      .order("created_at", { ascending: false });
+      `,
+    )
+    .neq("status", "archived");
+
+  if (opportunitiesOnly) {
+    query = query.eq("status", "recruiting");
+  }
+
+  const { data, error } = await query.order("created_at", { ascending: false });
 
   if (error) {
     console.error("getTeamsForListing error:", error);

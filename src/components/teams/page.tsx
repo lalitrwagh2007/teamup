@@ -1,227 +1,118 @@
-"use client";
-import type { TeamTrack, WorkMode } from "@/types/database";
-import { useMemo, useState } from "react";
+import Link from "next/link";
+import { Plus, Building2 } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
+import Navbar from "@/components/layout/Navbar";
 import TeamCard from "@/components/teams/TeamCard";
-import { Input } from "@/components/ui/input";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-export interface TeamDiscoveryItem {
-  id: string;
-  name: string;
-  description: string;
-  track: TeamTrack;
-  category: string;
-  currentMembers: number;
-  maxMembers: number;
-  skills: string[];
-  mode: WorkMode;
-  location: string;
-  matchScore?: number;
-}
-interface TeamsPageProps {
-  teams: TeamDiscoveryItem[];
+
+import { getTeamsForListing } from "@/app/actions/team";
+
+import type { TeamRecord } from "@/types/team";
+
+export const dynamic = "force-dynamic";
+
+async function getTeamsData(opportunitiesOnly = false): Promise<TeamRecord[]> {
+  const result = await getTeamsForListing(opportunitiesOnly);
+
+  if (!result.success) {
+    console.error("Failed to load teams:", result.error);
+    return [];
+  }
+
+  return result.data ?? [];
 }
 
-const skillOptions = [
-  "All",
-  "Python",
-  "Next.js",
-  "React",
-  "TypeScript",
-  "Node.js",
-  "Figma",
-  "AWS",
-  "Docker",
-  "SQL",
-];
+export default async function TeamsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ view?: string }>;
+}) {
+  const params = await searchParams;
 
-const categoryOptions = [
-  "All",
-  "AI / Machine Learning",
-  "Web Development",
-  "Design",
-  "Mobile Development",
-  "Cloud / DevOps",
-  "Data Science",
-];
+  const opportunitiesOnly = params.view === "opportunities";
 
-const modeOptions = ["All", "Remote", "Hybrid", "On-site"];
-
-type TrackFilter = "all" | "technical" | "community";
-
-export default function TeamsPage({ teams }: TeamsPageProps) {
-  const [search, setSearch] = useState("");
-  const [skill, setSkill] = useState("All");
-  const [category, setCategory] = useState("All");
-  const [mode, setMode] = useState("All");
-  const [track, setTrack] = useState<TrackFilter>("all");
-
-  const filteredTeams = useMemo(() => {
-    const query = search.trim().toLowerCase();
-
-    return teams.filter((team) => {
-      const matchesSearch =
-        query.length === 0 ||
-        team.name.toLowerCase().includes(query) ||
-        team.description.toLowerCase().includes(query) ||
-        team.skills.some((item) => item.toLowerCase().includes(query));
-
-      const matchesSkill =
-        skill === "All" ||
-        team.skills.some((item) => item.toLowerCase() === skill.toLowerCase());
-
-      const matchesCategory = category === "All" || team.category === category;
-
-      const matchesMode = mode === "All" || team.mode === mode;
-
-      const matchesTrack = track === "all" || team.track === track;
-
-      return (
-        matchesSearch &&
-        matchesSkill &&
-        matchesCategory &&
-        matchesMode &&
-        matchesTrack
-      );
-    });
-  }, [teams, search, skill, category, mode, track]);
+  const teams = await getTeamsData(opportunitiesOnly);
 
   return (
-    <main className="min-h-screen bg-background px-4 py-8 sm:px-6 lg:px-8">
-      <div className="mx-auto max-w-7xl space-y-8">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight">Explore Teams</h1>
-          <p className="text-muted-foreground">
-            Find teams that match your skills, interests, and goals.
-          </p>
-        </div>
+    <div className="flex min-h-screen flex-col bg-muted/30">
+      <Navbar />
 
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={() => setTrack("all")}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              track === "all"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            All Teams
-          </button>
+      <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 lg:px-8">
+        <div className="mb-8 flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center">
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight sm:text-4xl">
+              {opportunitiesOnly ? "Opportunities" : "Discover Teams"}
+            </h1>
 
-          <button
-            type="button"
-            onClick={() => setTrack("technical")}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              track === "technical"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Technical & Academic
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setTrack("community")}
-            className={`rounded-full px-4 py-2 text-sm font-medium transition ${
-              track === "community"
-                ? "bg-primary text-primary-foreground"
-                : "bg-muted text-muted-foreground hover:bg-muted/80"
-            }`}
-          >
-            Community & Social
-          </button>
-        </div>
-
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          <Input
-            placeholder="Search teams..."
-            value={search}
-            onChange={(event) => setSearch(event.target.value)}
-          />
-
-          <Select
-            value={skill}
-            onValueChange={(value) => value !== null && setSkill(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Skill" />
-            </SelectTrigger>
-            <SelectContent>
-              {skillOptions.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item === "All" ? "All Skills" : item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={category}
-            onValueChange={(value) => value !== null && setCategory(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categoryOptions.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item === "All" ? "All Categories" : item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select
-            value={mode}
-            onValueChange={(value) => value !== null && setMode(value)}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Mode" />
-            </SelectTrigger>
-            <SelectContent>
-              {modeOptions.map((item) => (
-                <SelectItem key={item} value={item}>
-                  {item === "All" ? "All Modes" : item}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {filteredTeams.length === 0 ? (
-          <div className="rounded-2xl border bg-card p-10 text-center">
-            <h2 className="text-lg font-semibold">No teams found</h2>
-            <p className="mt-2 text-sm text-muted-foreground">
-              Try adjusting your search or filters.
+            <p className="mt-2 text-muted-foreground">
+              {opportunitiesOnly
+                ? "Browse teams that are actively recruiting members."
+                : "Explore all active teams, or create your own."}
             </p>
           </div>
-        ) : (
-          <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
-            {filteredTeams.map((team) => (
+
+          <Link href="/create-team">
+            <Button
+              size="sm"
+              className="gap-1.5 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+            >
+              <Plus className="size-4" />
+              Create Team
+            </Button>
+          </Link>
+        </div>
+
+        {teams.length > 0 ? (
+          <div className="grid gap-6 sm:grid-cols-2 xl:grid-cols-3">
+            {teams.map((team) => (
               <TeamCard
                 key={team.id}
                 id={team.id}
                 name={team.name}
-                description={team.description}
-                category={team.category}
-                currentMembers={team.currentMembers}
+                description={team.description ?? ""}
+                category={team.category ?? "General"}
+                currentMembers={team.currentMembers ?? 1}
                 maxMembers={team.maxMembers}
-                skills={team.skills}
-                mode={team.mode}
-                location={team.location}
-                matchScore={team.matchScore}
+                skills={[]}
+                mode={team.mode ?? "Remote"}
+                location={team.location ?? "Not specified"}
               />
             ))}
           </div>
+        ) : (
+          <Card className="mx-auto w-full max-w-2xl">
+            <CardHeader className="text-center">
+              <CardTitle className="flex items-center justify-center gap-2">
+                <Building2 className="h-6 w-6 text-muted-foreground" />
+
+                {opportunitiesOnly
+                  ? "No opportunities available"
+                  : "No teams available"}
+              </CardTitle>
+            </CardHeader>
+
+            <CardContent className="py-8 text-center">
+              <p className="mb-6 text-muted-foreground">
+                {opportunitiesOnly
+                  ? "There are no teams actively recruiting right now."
+                  : "Be the first to create a team and start building together!"}
+              </p>
+
+              <Link href="/create-team">
+                <Button
+                  size="lg"
+                  className="gap-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+                >
+                  <Plus className="size-4" />
+                  Create Your Team
+                </Button>
+              </Link>
+            </CardContent>
+          </Card>
         )}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
