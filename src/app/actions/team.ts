@@ -252,6 +252,35 @@ async function verifyRoleSkillsExist(
   return null;
 }
 
+async function verifyInterestsExist(
+  supabase: Awaited<
+    ReturnType<typeof createClient>
+  >,
+  interestIds: string[],
+): Promise<string | null> {
+  if (interestIds.length === 0) {
+    return null;
+  }
+
+  const { data, error } = await supabase
+    .from("interests")
+    .select("id")
+    .in("id", interestIds);
+
+  if (error) {
+    return error.message;
+  }
+
+  if (
+    (data ?? []).length !==
+    interestIds.length
+  ) {
+    return "One or more selected interests do not exist.";
+  }
+
+  return null;
+}
+
 async function createRolesForTeam(
   supabase: Awaited<
     ReturnType<typeof createClient>
@@ -321,6 +350,7 @@ function validateCreateTeam(
         mode: WorkMode | null;
         location: string | null;
         maxMembers: number;
+        interestIds: string[];
       };
     }
   | {
@@ -379,6 +409,26 @@ function validateCreateTeam(
     };
   }
 
+  // Validate interestIds
+  const rawInterestIds = input.interestIds ?? [];
+  const uniqueInterestIds = [...new Set(rawInterestIds.filter((id): id is string => Boolean(id)))];
+
+  if (uniqueInterestIds.length > 5) {
+    return {
+      valid: false,
+      error: "You can select up to 5 interests.",
+    };
+  }
+
+  for (const id of uniqueInterestIds) {
+    if (!isValidUuid(id)) {
+      return {
+        valid: false,
+        error: "One or more selected interests are invalid.",
+      };
+    }
+  }
+
   return {
     valid: true,
     data: {
@@ -406,6 +456,7 @@ function validateCreateTeam(
           160,
         ) ?? null,
       maxMembers,
+      interestIds: uniqueInterestIds,
     },
   };
 }
@@ -682,6 +733,26 @@ export async function createTeam(
     };
   }
 
+  // Verify interest IDs exist
+  const interestsError = await verifyInterestsExist(
+    supabase,
+    validation.data.interestIds,
+  );
+
+  if (interestsError) {
+    await supabase
+      .from("teams")
+      .delete()
+      .eq("id", team.id)
+      .eq("leader_id", user.id);
+
+    return {
+      success: false,
+      data: null,
+      error: interestsError,
+    };
+  }
+
   const skillsError =
     await verifyRoleSkillsExist(
       supabase,
@@ -721,6 +792,32 @@ export async function createTeam(
       data: null,
       error: rolesError,
     };
+  }
+
+  // Insert team_interests mappings
+  if (validation.data.interestIds.length > 0) {
+    const { error: interestsInsertError } = await supabase
+      .from("team_interests")
+      .insert(
+        validation.data.interestIds.map((interestId) => ({
+          team_id: team.id,
+          interest_id: interestId,
+        }))
+      );
+
+    if (interestsInsertError) {
+      await supabase
+        .from("teams")
+        .delete()
+        .eq("id", team.id)
+        .eq("leader_id", user.id);
+
+      return {
+        success: false,
+        data: null,
+        error: "Failed to save team interests.",
+      };
+    }
   }
 
   revalidatePath("/teams");
@@ -764,10 +861,22 @@ export async function getTeams(): Promise<
   };
 }
 
+export interface TeamListingFilters {
+  opportunitiesOnly?: boolean;
+  search?: string | null;
+  interestId?: string | null;
+  skillId?: string | null;
+  status?: string | null;
+  workMode?: string | null;
+  track?: string | null;
+}
+
 export async function getTeamsForListing(
-  opportunitiesOnly = false,
+  filters: TeamListingFilters = {},
 ): Promise<TeamActionResult<TeamRecord[]>> {
   const supabase = await createClient();
+
+  const { opportunitiesOnly, search, interestId, skillId, status, workMode, track } = filters;
 
   let query = supabase
     .from("teams")
@@ -794,8 +903,113 @@ export async function getTeamsForListing(
     )
     .neq("status", "archived");
 
+  // Handle view=opportunities - forces recruiting status
   if (opportunitiesOnly) {
     query = query.eq("status", "recruiting");
+  } else if (status) {
+    // Allow explicit status filter when not in opportunities mode
+    query = query.eq("status", status);
+  }
+
+  // Text search across team name, description, role titles, and skill names
+  if (search) {
+    const searchTerm = `%${search.toLowerCase()}%`;
+    query = query.or(
+      `name.ilike.${searchTerm},description.ilike.${searchTerm},category.ilike.${searchTerm},location.ilike.${searchTerm},track.ilike.${searchTerm}`
+    );
+  }
+
+  // Interest filter - join via team_interests table
+  if (interestId) {
+    const { data: teamInterestRows, error: teamInterestError } = await supabase
+      .from("team_interests")
+      .select("team_id")
+      .eq("interest_id", interestId);
+
+    if (teamInterestError) {
+      console.error("team_interests query error:", teamInterestError);
+      return {
+        success: false,
+        data: null,
+        error: teamInterestError.message,
+      };
+    }
+
+    const teamIds = (teamInterestRows ?? []).map((row) => row.team_id);
+
+    if (teamIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+        error: null,
+      };
+    }
+
+    query = query.in("id", teamIds);
+  }
+
+  // Skill filter - join via team_roles -> team_role_skills -> skills
+  if (skillId) {
+    const { data: roleSkillRows, error: roleSkillError } = await supabase
+      .from("team_role_skills")
+      .select("role_id")
+      .eq("skill_id", skillId);
+
+    if (roleSkillError) {
+      console.error("team_role_skills query error:", roleSkillError);
+      return {
+        success: false,
+        data: null,
+        error: roleSkillError.message,
+      };
+    }
+
+    const roleIds = (roleSkillRows ?? []).map((row) => row.role_id);
+
+    if (roleIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+        error: null,
+      };
+    }
+
+    // Get team IDs that have these roles
+    const { data: teamRoleRows, error: teamRoleError } = await supabase
+      .from("team_roles")
+      .select("team_id")
+      .in("id", roleIds);
+
+    if (teamRoleError) {
+      console.error("team_roles query error:", teamRoleError);
+      return {
+        success: false,
+        data: null,
+        error: teamRoleError.message,
+      };
+    }
+
+    const teamIds = [...new Set((teamRoleRows ?? []).map((row) => row.team_id))];
+
+    if (teamIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+        error: null,
+      };
+    }
+
+    query = query.in("id", teamIds);
+  }
+
+  // Work mode filter
+  if (workMode) {
+    query = query.eq("mode", workMode);
+  }
+
+  // Track filter
+  if (track) {
+    query = query.eq("track", track);
   }
 
   const { data, error } = await query.order("created_at", { ascending: false });

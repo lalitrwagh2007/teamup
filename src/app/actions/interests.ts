@@ -17,6 +17,7 @@ export type InterestActionResult<T = undefined> =
   | {
       success: false;
       message: string;
+      data: T;
       errors?: Record<string, string[]>;
     };
 
@@ -70,6 +71,7 @@ export async function getUserInterests(): Promise<
       return {
         success: false,
         message: "Authentication required.",
+        data: [],
       };
     }
 
@@ -82,6 +84,7 @@ export async function getUserInterests(): Promise<
       return {
         success: false,
         message: "Failed to fetch your interests.",
+        data: [],
       };
     }
 
@@ -103,6 +106,7 @@ export async function getUserInterests(): Promise<
       return {
         success: false,
         message: "Failed to fetch your interest details.",
+        data: [],
       };
     }
 
@@ -118,6 +122,7 @@ export async function getUserInterests(): Promise<
     return {
       success: false,
       message: "An unexpected error occurred while fetching interests.",
+      data: [],
     };
   }
 }
@@ -137,6 +142,7 @@ export async function addUserInterest(
       return {
         success: false,
         message: "You must be logged in to add interests.",
+        data: [],
       };
     }
 
@@ -148,6 +154,7 @@ export async function addUserInterest(
       return {
         success: false,
         message: "Invalid interest name.",
+        data: [],
         errors: validation.error.flatten().fieldErrors as Record<
           string,
           string[]
@@ -167,6 +174,7 @@ export async function addUserInterest(
       return {
         success: false,
         message: "Failed to look up the interest.",
+        data: [],
       };
     }
 
@@ -187,6 +195,7 @@ export async function addUserInterest(
         return {
           success: false,
           message: "Failed to create the interest.",
+          data: [],
         };
       }
 
@@ -205,6 +214,7 @@ export async function addUserInterest(
       return {
         success: false,
         message: "Failed to check whether the interest is already added.",
+        data: [],
       };
     }
 
@@ -212,6 +222,7 @@ export async function addUserInterest(
       return {
         success: false,
         message: `"${interest.name}" is already in your interests.`,
+        data: [],
       };
     }
 
@@ -228,12 +239,14 @@ export async function addUserInterest(
         return {
           success: false,
           message: `"${interest.name}" is already in your interests.`,
+          data: [],
         };
       }
 
       return {
         success: false,
         message: "Failed to add the interest to your profile.",
+        data: [],
       };
     }
 
@@ -253,6 +266,7 @@ export async function addUserInterest(
     return {
       success: false,
       message: "An unexpected error occurred while adding the interest.",
+      data: [],
     };
   }
 }
@@ -270,6 +284,7 @@ export async function removeUserInterest(
       return {
         success: false,
         message: "You must be logged in to remove interests.",
+        data: [],
       };
     }
 
@@ -281,6 +296,7 @@ export async function removeUserInterest(
       return {
         success: false,
         message: "Invalid interest ID provided.",
+        data: [],
       };
     }
 
@@ -296,6 +312,7 @@ export async function removeUserInterest(
       return {
         success: false,
         message: "Failed to remove the interest from your profile.",
+        data: [],
       };
     }
 
@@ -313,6 +330,44 @@ export async function removeUserInterest(
     return {
       success: false,
       message: "An unexpected error occurred while removing the interest.",
+      data: [],
+    };
+  }
+}
+
+/**
+ * Fetch all interests for filter dropdown.
+ * Public access - no authentication required.
+ */
+export async function getAllInterests(): Promise<InterestActionResult<Interest[]>> {
+  try {
+    const supabase = await createClient();
+
+    const { data, error } = await supabase
+      .from("interests")
+      .select("id, name, category, created_at")
+      .order("name", { ascending: true });
+
+    if (error) {
+      console.error("getAllInterests error:", error);
+      return {
+        success: false,
+        message: "Failed to fetch interests.",
+        data: [],
+      };
+    }
+
+    const formattedInterests = (data ?? []).map((interest) => mapInterest(interest));
+
+    return {
+      success: true,
+      data: formattedInterests,
+    };
+  } catch {
+    return {
+      success: false,
+      message: "An unexpected error occurred while fetching interests.",
+      data: [],
     };
   }
 }

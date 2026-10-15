@@ -1,7 +1,10 @@
 "use client";
 
 import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
 import ApplyToTeamDialog from "./ApplyToTeamDialog";
+
 import type { TeamRoleDetail } from "@/types/team";
 
 interface ApplyToTeamTriggerProps {
@@ -17,20 +20,27 @@ export default function ApplyToTeamTrigger({
 
   if (openRoles.length === 0) {
     return (
-      <button className="w-full" disabled>
-        Apply to Join
-      </button>
+      <div className="space-y-2">
+        <Button type="button" className="w-full" disabled>
+          No Open Roles
+        </Button>
+
+        <p className="text-center text-xs text-muted-foreground">
+          This team is not accepting applications right now.
+        </p>
+      </div>
     );
   }
 
   return (
     <>
-      <button
+      <Button
+        type="button"
         className="w-full"
         onClick={() => setShowApplyDialog(true)}
       >
         Apply to Join
-      </button>
+      </Button>
 
       {showApplyDialog && (
         <ApplyToTeamDialog

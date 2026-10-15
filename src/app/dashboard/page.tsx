@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { redirect } from "next/navigation";
 import {
   ArrowRight,
   Bell,
@@ -85,7 +85,7 @@ export default async function DashboardPage() {
   const { profile, applications, myTeams, allTeams } = await getDashboardData();
 
   if (!profile) {
-    notFound();
+    redirect("/onboarding");
   }
 
   const hour = new Date().getHours();

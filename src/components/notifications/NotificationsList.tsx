@@ -5,10 +5,17 @@ import { Bell, CheckCircle2, Mail, UserPlus, Users } from "lucide-react";
 import { toast } from "sonner";
 
 import {
+  acceptApplication,
+  rejectApplication,
+} from "@/app/actions/application";
+import {
   markAsRead,
   type NotificationResult,
 } from "@/app/actions/notification";
+
+import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
+
 import type { Database } from "@/types/database";
 
 type Notification = Database["public"]["Tables"]["notifications"]["Row"];
@@ -56,6 +63,28 @@ function formatNotificationDate(date: string) {
   }).format(parsedDate);
 }
 
+function getApplicationId(data: Notification["data"]): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+
+  const record = data as Record<string, unknown>;
+  const applicationId = record.application_id;
+
+  return typeof applicationId === "string" ? applicationId : null;
+}
+
+function getApplicationStatus(data: Notification["data"]): string | null {
+  if (!data || typeof data !== "object" || Array.isArray(data)) {
+    return null;
+  }
+
+  const record = data as Record<string, unknown>;
+  const status = record.application_status;
+
+  return typeof status === "string" ? status : null;
+}
+
 export default function NotificationsList({
   initialNotifications,
 }: NotificationsListProps) {
@@ -63,6 +92,10 @@ export default function NotificationsList({
     useState<Notification[]>(initialNotifications);
 
   const [isPending, startTransition] = useTransition();
+
+  const [applicationLoadingId, setApplicationLoadingId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     const handleNotificationInserted = (event: Event) => {
@@ -107,7 +140,12 @@ export default function NotificationsList({
 
     setNotifications((current) =>
       current.map((item) =>
-        item.id === notificationId ? { ...item, read: true } : item,
+        item.id === notificationId
+          ? {
+              ...item,
+              read: true,
+            }
+          : item,
       ),
     );
 
@@ -117,7 +155,12 @@ export default function NotificationsList({
       if (!result.success) {
         setNotifications((current) =>
           current.map((item) =>
-            item.id === notificationId ? { ...item, read: false } : item,
+            item.id === notificationId
+              ? {
+                  ...item,
+                  read: false,
+                }
+              : item,
           ),
         );
 
@@ -128,6 +171,89 @@ export default function NotificationsList({
 
       window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
     });
+  };
+
+  const handleApplicationAction = async (
+    notification: Notification,
+    action: "accept" | "reject",
+  ) => {
+    const applicationId = getApplicationId(notification.data);
+
+    if (!applicationId) {
+      toast.error("Application information is missing.");
+      return;
+    }
+
+    if (applicationLoadingId) {
+      return;
+    }
+
+    setApplicationLoadingId(applicationId);
+
+    try {
+      const result =
+        action === "accept"
+          ? await acceptApplication(applicationId)
+          : await rejectApplication(applicationId);
+
+      if (!result.success) {
+        toast.error(result.error ?? `Unable to ${action} application.`);
+        return;
+      }
+
+      toast.success(
+        action === "accept"
+          ? "Application accepted. Applicant added to the team."
+          : "Application rejected.",
+      );
+
+      /*
+       * Update the notification locally so the
+       * Accept / Reject buttons disappear after action.
+       */
+      setNotifications((current) =>
+        current.map((item) => {
+          if (item.id !== notification.id) {
+            return item;
+          }
+
+          const currentData =
+            item.data &&
+            typeof item.data === "object" &&
+            !Array.isArray(item.data)
+              ? (item.data as Record<string, unknown>)
+              : {};
+
+          return {
+            ...item,
+            read: true,
+            data: {
+              ...currentData,
+              application_status: action === "accept" ? "accepted" : "rejected",
+            },
+          } as Notification;
+        }),
+      );
+
+      if (!notification.read) {
+        const readResult = await markAsRead(notification.id);
+
+        if (!readResult.success) {
+          console.error(
+            "Unable to mark notification as read:",
+            readResult.error,
+          );
+        }
+      }
+
+      window.dispatchEvent(new Event(NOTIFICATIONS_UPDATED_EVENT));
+    } catch (error) {
+      console.error("Application action failed:", error);
+
+      toast.error("Something went wrong while updating the application.");
+    } finally {
+      setApplicationLoadingId(null);
+    }
   };
 
   if (notifications.length === 0) {
@@ -150,54 +276,111 @@ export default function NotificationsList({
 
   return (
     <div className="space-y-3">
-      {notifications.map((notification) => (
-        <Card
-          key={notification.id}
-          role={!notification.read ? "button" : undefined}
-          tabIndex={!notification.read ? 0 : undefined}
-          onClick={() => handleMarkAsRead(notification.id)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              handleMarkAsRead(notification.id);
+      {notifications.map((notification) => {
+        const applicationId = getApplicationId(notification.data);
+
+        const applicationStatus = getApplicationStatus(notification.data);
+
+        const isApplicationLoading =
+          applicationId !== null && applicationLoadingId === applicationId;
+
+        const showApplicationActions =
+          notification.type === "application_received" &&
+          applicationId !== null &&
+          applicationStatus !== "accepted" &&
+          applicationStatus !== "rejected";
+
+        return (
+          <Card
+            key={notification.id}
+            role={!notification.read ? "button" : undefined}
+            tabIndex={!notification.read ? 0 : undefined}
+            onClick={() => handleMarkAsRead(notification.id)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+
+                handleMarkAsRead(notification.id);
+              }
+            }}
+            className={
+              !notification.read
+                ? "cursor-pointer border-indigo-200 bg-indigo-50/50 transition-colors hover:bg-indigo-50"
+                : "cursor-default"
             }
-          }}
-          className={
-            !notification.read
-              ? "cursor-pointer border-indigo-200 bg-indigo-50/50 transition-colors hover:bg-indigo-50"
-              : "cursor-default"
-          }
-        >
-          <CardContent className="flex items-start gap-4 p-4">
-            <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
-              {getNotificationIcon(notification.type)}
-            </div>
-
-            <div className="min-w-0 flex-1">
-              <div className="flex items-start justify-between gap-3">
-                <div>
-                  <p className="font-medium">{notification.title}</p>
-
-                  <p className="mt-1 text-sm text-muted-foreground">
-                    {notification.message}
-                  </p>
-                </div>
-
-                {!notification.read && (
-                  <span
-                    className="mt-1 size-2 shrink-0 rounded-full bg-indigo-600"
-                    aria-label="Unread"
-                  />
-                )}
+          >
+            <CardContent className="flex items-start gap-4 p-4">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-muted">
+                {getNotificationIcon(notification.type)}
               </div>
 
-              <p className="mt-2 text-xs text-muted-foreground">
-                {formatNotificationDate(notification.created_at)}
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+              <div className="min-w-0 flex-1">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <p className="font-medium">{notification.title}</p>
+
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      {notification.message}
+                    </p>
+
+                    {showApplicationActions && (
+                      <div
+                        className="mt-4 flex flex-wrap gap-2"
+                        onClick={(event) => event.stopPropagation()}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
+                        <Button
+                          type="button"
+                          variant="outline"
+                          disabled={isApplicationLoading}
+                          onClick={() =>
+                            handleApplicationAction(notification, "reject")
+                          }
+                        >
+                          {isApplicationLoading ? "Updating..." : "Reject"}
+                        </Button>
+
+                        <Button
+                          type="button"
+                          disabled={isApplicationLoading}
+                          onClick={() =>
+                            handleApplicationAction(notification, "accept")
+                          }
+                        >
+                          {isApplicationLoading ? "Updating..." : "Accept"}
+                        </Button>
+                      </div>
+                    )}
+
+                    {applicationStatus === "accepted" && (
+                      <p className="mt-3 text-sm font-medium text-emerald-600">
+                        Application accepted.
+                      </p>
+                    )}
+
+                    {applicationStatus === "rejected" && (
+                      <p className="mt-3 text-sm font-medium text-red-600">
+                        Application rejected.
+                      </p>
+                    )}
+                  </div>
+
+                  {!notification.read && (
+                    <span
+                      className="mt-1 size-2 shrink-0 rounded-full bg-indigo-600"
+                      aria-label="Unread"
+                    />
+                  )}
+                </div>
+
+                <p className="mt-2 text-xs text-muted-foreground">
+                  {formatNotificationDate(notification.created_at)}
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

@@ -55,6 +55,7 @@ export interface CreateTeamInput {
   location?: string | null;
   maxMembers?: number;
   roles?: TeamRoleInput[];
+  interestIds?: string[];
 }
 
 export interface UpdateTeamInput {

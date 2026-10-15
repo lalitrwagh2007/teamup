@@ -26,11 +26,17 @@ import type {
   WorkMode,
 } from "@/types/team";
 
+import { Check, ChevronDown, ChevronUp } from "lucide-react";
+
 interface TeamFormProps {
   availableSkills: AvailableRoleSkill[];
+  availableInterests: { id: string; name: string }[];
 }
 
-export default function TeamForm({ availableSkills }: TeamFormProps) {
+export default function TeamForm({
+  availableSkills,
+  availableInterests,
+}: TeamFormProps) {
   const router = useRouter();
 
   const [isPending, startTransition] = useTransition();
@@ -45,7 +51,21 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
 
   const [roles, setRoles] = useState<TeamRoleInput[]>([]);
 
+  const [selectedInterestIds, setSelectedInterestIds] = useState<string[]>([]);
+  const [showInterests, setShowInterests] = useState(false);
+
   const [error, setError] = useState<string | null>(null);
+
+  const MAX_INTERESTS = 5;
+
+  const SELECTED_CLASS = "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-indigo-600 border-indigo-600 text-white";
+  const UNSELECTED_BASE = "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-muted border-border text-foreground";
+  const HOVER_MUTED = " hover:bg-muted/50";
+  const DISABLED_SUFFIX = " opacity-50 cursor-not-allowed";
+  const UNSELECTED_CLASS = UNSELECTED_BASE + " hover:bg-muted/50";
+  const SELECTED_CLASS_STR = "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-indigo-600 border-indigo-600 text-white";
+  const UNSELECTED_CLASS_STR = "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-muted border-border text-foreground hover:bg-muted/50";
+  const DISABLED_SUFFIX_STR = " opacity-50 cursor-not-allowed";
 
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -84,6 +104,11 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
       }
     }
 
+    if (selectedInterestIds.length > 5) {
+      setError("You can select up to 5 interests.");
+      return;
+    }
+
     startTransition(async () => {
       const result = await createTeam({
         name: name.trim(),
@@ -94,6 +119,7 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
         location: location.trim() || null,
         maxMembers: parsedMaxMembers,
         roles,
+        interestIds: selectedInterestIds,
       });
 
       if (!result.success) {
@@ -101,9 +127,21 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
         return;
       }
 
-      router.push(`/teams/${result.data.id}`);
+      router.push("/teams/" + result.data.id);
 
       router.refresh();
+    });
+  }
+
+  function toggleInterest(interestId: string) {
+    setSelectedInterestIds((prev) => {
+      if (prev.includes(interestId)) {
+        return prev.filter((id) => id !== interestId);
+      }
+      if (prev.length >= 5) {
+        return prev;
+      }
+      return [...prev, interestId];
     });
   }
 
@@ -169,9 +207,7 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
                     Technical & Academic
                   </SelectItem>
 
-                  <SelectItem value="community">
-                    Community & Social
-                  </SelectItem>
+                  <SelectItem value="community">Community & Social</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -252,6 +288,63 @@ export default function TeamForm({ availableSkills }: TeamFormProps) {
               required
             />
           </div>
+        </div>
+
+        {/* Interests Section */}
+        <div className="rounded-xl border bg-card p-6">
+          <div className="flex items-center justify-between mb-4">
+            <label className="text-sm font-medium">Interests</label>
+            <button
+              type="button"
+              onClick={() => setShowInterests(!showInterests)}
+              disabled={isPending}
+              className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              {showInterests ? (
+                <ChevronUp className="h-4 w-4" />
+              ) : (
+                <ChevronDown className="h-4 w-4" />
+              )}
+              <span>{showInterests ? "Hide" : "Select"}</span>
+            </button>
+          </div>
+
+          {showInterests && (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                Select up to 5 interests. Selected: {selectedInterestIds.length}
+                /5
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {availableInterests.map((interest) => (
+                  <button
+                    key={interest.id}
+                    type="button"
+                    onClick={() => toggleInterest(interest.id)}
+                    disabled={
+                      isPending ||
+                      (!selectedInterestIds.includes(interest.id) &&
+                        selectedInterestIds.length >= 5)
+                    }
+                    className={
+                      selectedInterestIds.includes(interest.id)
+                        ? "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-indigo-600 border-indigo-600 text-white"
+                        : "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium transition-colors bg-muted border-border text-foreground hover:bg-muted/50" +
+                          (!selectedInterestIds.includes(interest.id) &&
+                          selectedInterestIds.length >= 5
+                            ? " opacity-50 cursor-not-allowed"
+                            : "")
+                    }
+                  >
+                    {selectedInterestIds.includes(interest.id) && (
+                      <Check className="h-4 w-4" />
+                    )}
+                    {interest.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="rounded-xl border bg-card p-6">
